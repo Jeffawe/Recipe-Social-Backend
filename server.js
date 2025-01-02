@@ -22,6 +22,10 @@ connect(process.env.MONGODB_URI, {
 .then(() => console.log('MongoDB connected successfully'))
 .catch((err) => console.error('MongoDB connection error:', err));
 
+app.get('/', (req, res) => {
+  res.send('Welcome to the Recipe Social API');
+});
+
 // Routes
 app.use('/api/recipes', recipeRoutes);
 app.use('/api/auth', userRoutes);
