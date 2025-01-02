@@ -3,9 +3,9 @@ import express, { json } from 'express';
 import { connect } from 'mongoose';
 import cors from 'cors';
 
-import recipeRoutes from './routes/recipeRoutes.js';
-import userRoutes from './routes/userRoutes.js';
-import templateRoutes from './routes/templateRoutes.js';
+import recipeRoutes from '../routes/recipeRoutes.js';
+import userRoutes from '../routes/userRoutes.js';
+import templateRoutes from '../routes/templateRoutes.js';
 
 // Create Express application
 const app = express();
