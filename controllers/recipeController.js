@@ -41,7 +41,7 @@ export const createRecipe = async (req, res) => {
             { new: true }
         );
 
-        if(req.body.templateID){
+        if (req.body.templateID) {
             await Template.findByIdAndUpdate(req.body.templateID, {
                 $inc: { recipeCount: 1 }
             });
@@ -134,6 +134,7 @@ export const getSingleRecipe = async (req, res) => {
 
 export const updateRecipe = async (req, res) => {
     try {
+        console.log(req.body)
         const recipe = await Recipe.findById(req.params.id);
 
         if (!recipe) {
@@ -144,13 +145,33 @@ export const updateRecipe = async (req, res) => {
             return res.status(403).json({ message: 'Not authorized to update this recipe' });
         }
 
+        const { existingImages } = req.body;
+        let uploadedImages = [];
+
+        // Upload new images if files are provided
+        if (req.files && req.files.length > 0) {
+            uploadedImages = await uploadImagesToS3(req.files);
+        }
+
+        const updatedImages = [
+            ...(existingImages ? JSON.parse(existingImages) : []), // Parse JSON string from frontend
+            ...uploadedImages,
+        ];
+
+        console.log(uploadedImages)
+
         const oldTemplateId = recipe.templateID;
         const newTemplateId = req.body.templateID;
+
+        return;
 
         // Update recipe with new data
         const updatedRecipe = await Recipe.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            {
+                ...req.body,
+                images: updatedImages,
+            },
             { new: true, runValidators: true }
         );
 
@@ -281,5 +302,20 @@ export const saveRecipe = async (req, res) => {
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+export const getImages = async (req, res) => {
+    const recipeId = req.params.id;
+
+    try {
+      const recipe = await Recipe.findById(recipeId);
+      if (!recipe) {
+        return res.status(404).json({ message: 'Recipe not found' });
+      }
+      return res.json(recipe.images);  // Return the images array
+    } catch (error) {
+      console.error('Error fetching images:', error);
+      res.status(500).json({ message: 'Server error' });
     }
 };

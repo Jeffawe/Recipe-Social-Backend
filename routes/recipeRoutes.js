@@ -8,7 +8,8 @@ import {
   deleteRecipe, 
   searchRecipes ,
   likeRecipe,
-  saveRecipe
+  saveRecipe,
+  getImages
 } from '../controllers/recipeController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -34,6 +35,8 @@ router.post('/', authenticateToken, upload.array('images', 5), createRecipe);
 router.post('/:id/like', authenticateToken, likeRecipe);
 
 router.post('/:id/save', authenticateToken, saveRecipe);
+
+router.get(':id/images', authenticateToken, getImages)
 
 // Route to search recipes
 router.get('/search', searchRecipes);

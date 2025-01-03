@@ -254,7 +254,7 @@ export const getUserSavedRecipes = async (req, res, next) => {
 export const updateUserProfile = async (req, res, next) => {
   try {
     // Only allow updating specific fields
-    const allowedUpdates = ['username', 'bio', 'profilePicture'];
+    const allowedUpdates = ['username', 'bio'];
     const updates = Object.keys(req.body)
       .filter(key => allowedUpdates.includes(key))
       .reduce((obj, key) => {
@@ -263,7 +263,8 @@ export const updateUserProfile = async (req, res, next) => {
       }, {});
 
     // Make sure user can only update their own profile
-    if (req.user.id !== req.params.id) {
+    if (req.user.userId !== req.params.id) {
+      console.log
       throw new StatusError('Not authorized to update this profile', 403);
     }
 
