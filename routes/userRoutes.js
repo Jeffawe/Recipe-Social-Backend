@@ -5,7 +5,8 @@ import {
     getUserCreatedRecipes,
     getUserSavedRecipes,
     updateUserProfile,
-    authController
+    authController,
+    deleteUserAccount
   } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -24,7 +25,8 @@ router.get('/:id/recipes/created', getUserCreatedRecipes);
 
 router.get('/:id/recipes/saved', getUserSavedRecipes);
 
-// Protected routes (require authentication)
+router.delete('/:id', authenticateToken, deleteUserAccount)
+
 router.patch('/:id', authenticateToken, updateUserProfile);
 
 export default router;

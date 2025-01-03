@@ -42,9 +42,9 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Recipe'
   }],
-  isTestUser: {
+  isSystem: {
     type: Boolean,
-    default: true
+    default: false
   }
 }, {
   timestamps: true
@@ -61,5 +61,10 @@ UserSchema.pre('save', async function (next) {
 UserSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
+
+UserSchema.index({ isSystem: 1 }, { 
+  partialFilterExpression: { isSystem: true },
+  unique: true 
+});
 
 export default mongoose.model('User', UserSchema);

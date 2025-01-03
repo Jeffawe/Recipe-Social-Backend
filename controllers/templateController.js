@@ -25,7 +25,8 @@ export const saveTemplate = async (req, res) => {
 
         // Try to find existing template by content
         const existingTemplate = await Template.findOne({ 
-            template
+            template, 
+            author 
         });
 
         if (existingTemplate) {
@@ -101,6 +102,16 @@ export const updateTemplate = async (req, res) => {
         const { id } = req.params;
         const { template, public: isPublic } = req.body;
         const userId = req.user.userId;
+
+        const duplicateTemplate = await Template.findOne({
+            template,
+            author: userId,
+            _id: { $ne: id } // Exclude the current template
+        });
+        
+        if (duplicateTemplate) {
+            return res.status(400).json({ message: 'A template with the same content already exists.' });
+        }
 
         const updatedTemplate = await Template.findOneAndUpdate(
             { _id: id, author: userId }, // Ensure user owns the template

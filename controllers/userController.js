@@ -3,8 +3,11 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { StatusError } from './utils/Error.js';
 import { getPresignedUrl } from './services/s3services.js';
+import Template from '../models/Template.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const SYSTEM_USERNAME = 'Deleted User';
+const SYSTEM_EMAIL = 'deleted@system.internal';
 
 export const authController = {
   async googleAuth(req, res) {
@@ -57,8 +60,7 @@ export const authController = {
   // Add this new verify endpoint
   async verify(req, res) {
     try {
-      // The user's token will be available in req.user 
-      // because of your auth middleware
+      // The user's token will be available in req.user because of your auth middleware
       const user = await User.findById(req.user.userId)
         .select('-password'); // Exclude password from the response
 
@@ -276,6 +278,88 @@ export const updateUserProfile = async (req, res, next) => {
     }
 
     res.json(user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getOrCreateDeletedUser = async () => {
+  try {
+    let deletedUser = await User.findOne({
+      isSystem: true,
+      username: SYSTEM_USERNAME
+    });
+
+    if (!deletedUser) {
+      deletedUser = await User.create({
+        email: SYSTEM_EMAIL,
+        username: SYSTEM_USERNAME,
+        password: Math.random().toString(36),
+        isSystem: true,
+        bio: 'This account represents content from deleted users.',
+        profilePicture: 'default-profile.png'
+      });
+    }
+
+    return deletedUser;
+  } catch (error) {
+    console.error('Error managing deleted user:', error);
+    throw error;
+  }
+};
+
+export const deleteUserAccount = async (req, res, next) => {
+  try {
+    // Verify the user is deleting their own account
+    if (req.user.id !== req.params.id) {
+      throw new StatusError('Not authorized to delete this account', 403);
+    }
+
+    // Find the user first to make sure they exist
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      throw new StatusError('User not found', 404);
+    }
+
+    // Get or create the deleted user account
+    const deletedUser = await getOrCreateDeletedUser();
+
+    // Transfer recipes to deleted user instead of deleting them
+    if (user.createdRecipes && user.createdRecipes.length > 0) {
+      await Recipe.updateMany(
+        { _id: { $in: user.createdRecipes } },
+        {
+          $set: {
+            author: deletedUser._id,
+            // Add a note that this was from a deleted user
+            description: '[From a deleted user]\n\n' + '$description'
+          }
+        }
+      );
+    }
+
+    // For public templates, reassign to Deleted User
+    await Template.updateMany(
+      { author: user._id, public: true },
+      { $set: { author: deletedUser._id } }
+    );
+
+    // For private templates, delete them entirely
+    await Template.deleteMany({ author: user._id, public: false });
+
+    await User.findByIdAndUpdate(user._id, {
+      $set: { savedRecipes: [] }
+    });
+
+    // Finally, delete the user
+    await User.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      message: 'Account successfully deleted',
+      success: true
+    });
+
   } catch (error) {
     next(error);
   }

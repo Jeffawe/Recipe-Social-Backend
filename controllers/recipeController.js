@@ -1,6 +1,7 @@
 import { uploadImagesToS3, getPresignedUrl } from './services/s3services.js';
 import Recipe from '../models/Recipe.js';
 import User from '../models/User.js';
+import Template from '../models/Template.js';
 
 export const createRecipe = async (req, res) => {
     try {
@@ -39,6 +40,12 @@ export const createRecipe = async (req, res) => {
             },
             { new: true }
         );
+
+        if(req.body.templateID){
+            await Template.findByIdAndUpdate(req.body.templateID, {
+                $inc: { recipeCount: 1 }
+            });
+        }
 
         res.status(201).json(savedRecipe);
     } catch (error) {
@@ -127,25 +134,39 @@ export const getSingleRecipe = async (req, res) => {
 
 export const updateRecipe = async (req, res) => {
     try {
-        // Find recipe and check ownership
         const recipe = await Recipe.findById(req.params.id);
 
-        // Ensure recipe exists and user is the author
         if (!recipe) {
             return res.status(404).json({ message: 'Recipe not found' });
         }
 
-        // Check if current user is the author
         if (recipe.author.toString() !== req.user.userId.toString()) {
             return res.status(403).json({ message: 'Not authorized to update this recipe' });
         }
 
-        // Update recipe
+        const oldTemplateId = recipe.templateID;
+        const newTemplateId = req.body.templateID;
+
+        // Update recipe with new data
         const updatedRecipe = await Recipe.findByIdAndUpdate(
             req.params.id,
             req.body,
             { new: true, runValidators: true }
         );
+
+        // Handle template changes
+        if (oldTemplateId && oldTemplateId.toString() !== newTemplateId?.toString()) {
+            // Decrement count for old template
+            await Template.findByIdAndUpdate(oldTemplateId, { $inc: { recipeCount: -1 } });
+
+            // Remove private templates with 0 recipes
+            await Template.deleteMany({ public: false, recipeCount: { $lte: 0 } });
+        }
+
+        if (newTemplateId && oldTemplateId?.toString() !== newTemplateId.toString()) {
+            // Increment count for new template
+            await Template.findByIdAndUpdate(newTemplateId, { $inc: { recipeCount: 1 } });
+        }
 
         res.json({
             message: 'Recipe updated successfully',
@@ -162,21 +183,28 @@ export const updateRecipe = async (req, res) => {
 // Delete a recipe
 export const deleteRecipe = async (req, res) => {
     try {
-        // Find recipe and check ownership
         const recipe = await Recipe.findById(req.params.id);
 
-        // Ensure recipe exists
         if (!recipe) {
             return res.status(404).json({ message: 'Recipe not found' });
         }
 
-        // Check if current user is the author
-        if (recipe.author.toString() !== req.user.userID.toString()) {
+        if (recipe.author.toString() !== req.user.userId.toString()) {
             return res.status(403).json({ message: 'Not authorized to delete this recipe' });
         }
 
-        // Remove recipe from database
+        const templateId = recipe.templateID;
+
+        // Remove recipe
         await Recipe.findByIdAndDelete(req.params.id);
+
+        if (templateId) {
+            // Decrement count for the associated template
+            await Template.findByIdAndUpdate(templateId, { $inc: { recipeCount: -1 } });
+
+            // Remove private templates with 0 recipes
+            await Template.deleteMany({ public: false, recipeCount: { $lte: 0 } });
+        }
 
         res.json({ message: 'Recipe deleted successfully' });
     } catch (error) {
