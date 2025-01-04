@@ -42,7 +42,7 @@ router.get(':id/images', authenticateToken, getImages)
 router.get('/search', searchRecipes);
 
 // Route to update a recipe
-router.put('/:id', authenticateToken, updateRecipe);
+router.put('/:id', authenticateToken, upload.array('images', 5), updateRecipe);
 
 // Route to delete a recipe
 router.delete('/:id', authenticateToken, deleteRecipe);

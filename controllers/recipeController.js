@@ -5,13 +5,70 @@ import Template from '../models/Template.js';
 
 export const createRecipe = async (req, res) => {
     try {
+        const ingredients = JSON.parse(req.body.ingredients);
+        const directions = JSON.parse(req.body.directions);
+
+        // Function to normalize ingredient for comparison
+        const normalizeIngredient = (ing) => ({
+            name: ing.name.toLowerCase().trim(),
+            quantity: ing.quantity.toString(),
+            unit: ing.unit ? ing.unit.toLowerCase() : ''
+        });
+
+        // Function to normalize direction for comparison
+        const normalizeDirection = (dir) => ({
+            instruction: dir.instruction.toLowerCase().trim()
+        });
+
+        // Check for existing recipe with same title, ingredients, and directions
+        const existingRecipe = await Recipe.findOne({
+            $and: [
+                { title: { $regex: new RegExp('^' + req.body.title.trim() + '$', 'i') } },
+                {
+                    $expr: {
+                        $eq: [
+                            { $size: '$ingredients' },
+                            ingredients.length
+                        ]
+                    }
+                },
+                {
+                    $expr: {
+                        $eq: [
+                            { $size: '$directions' },
+                            directions.length
+                        ]
+                    }
+                }
+            ]
+        });
+
+        if (existingRecipe) {
+            // If we found a potential match, do detailed comparison
+            const normalizedNewIngredients = ingredients.map(normalizeIngredient);
+            const normalizedNewDirections = directions.map(normalizeDirection);
+
+            const normalizedExistingIngredients = existingRecipe.ingredients.map(normalizeIngredient);
+            const normalizedExistingDirections = existingRecipe.directions.map(normalizeDirection);
+
+            const ingredientsMatch = JSON.stringify(normalizedNewIngredients.sort((a, b) =>
+                a.name.localeCompare(b.name))) === JSON.stringify(normalizedExistingIngredients.sort((a, b) =>
+                    a.name.localeCompare(b.name)));
+
+            const directionsMatch = JSON.stringify(normalizedNewDirections) ===
+                JSON.stringify(normalizedExistingDirections);
+
+            if (ingredientsMatch && directionsMatch) {
+                return res.status(400).json({
+                    message: 'A similar recipe already exists',
+                    existingRecipeId: existingRecipe._id
+                });
+            }
+        }
         let uploadedImages = [];
         if (req.files && req.files.length > 0) {
             uploadedImages = await uploadImagesToS3(req.files);
         }
-
-        const ingredients = JSON.parse(req.body.ingredients);
-        const directions = JSON.parse(req.body.directions);
 
         const newRecipe = new Recipe({
             title: req.body.title,
@@ -134,7 +191,6 @@ export const getSingleRecipe = async (req, res) => {
 
 export const updateRecipe = async (req, res) => {
     try {
-        console.log(req.body)
         const recipe = await Recipe.findById(req.params.id);
 
         if (!recipe) {
@@ -145,34 +201,84 @@ export const updateRecipe = async (req, res) => {
             return res.status(403).json({ message: 'Not authorized to update this recipe' });
         }
 
-        const { existingImages } = req.body;
         let uploadedImages = [];
+        let existingImages = [];
 
-        // Upload new images if files are provided
+        // Handle existing images
+        try {
+            existingImages = req.body.existingImages ? JSON.parse(req.body.existingImages) : [];
+        } catch (error) {
+            console.error('Error parsing existingImages:', error);
+            existingImages = [];
+        }
+
         if (req.files && req.files.length > 0) {
             uploadedImages = await uploadImagesToS3(req.files);
         }
 
-        const updatedImages = [
-            ...(existingImages ? JSON.parse(existingImages) : []), // Parse JSON string from frontend
-            ...uploadedImages,
-        ];
-
-        console.log(uploadedImages)
+        const updatedImages = [...existingImages, ...uploadedImages];
 
         const oldTemplateId = recipe.templateID;
         const newTemplateId = req.body.templateID;
 
-        return;
+        const updatedData = {
+            title: req.body.title || recipe.title,
+            description: req.body.description || recipe.description,
 
-        // Update recipe with new data
+            ingredients: req.body.ingredients
+                ? JSON.parse(req.body.ingredients)
+                : recipe.ingredients,
+
+            directions: req.body.directions
+                ? JSON.parse(req.body.directions)
+                : recipe.directions,
+
+            images: updatedImages.length > 0
+                ? updatedImages
+                : recipe.images,
+
+            // Cooking Time
+            cookingTime: req.body.cookingTime
+                ? JSON.parse(req.body.cookingTime)
+                : recipe.cookingTime,
+
+            // Nutritional Information
+            nutrition: req.body.nutrition
+                ? JSON.parse(req.body.nutrition)
+                : recipe.nutrition,
+
+            category: req.body.category || recipe.category,
+
+            comments: recipe.comments,
+            faqs: recipe.faqs,
+            likes: recipe.likes,
+
+            // Metadata Flags
+            featured: req.body.featured !== undefined
+                ? req.body.featured
+                : recipe.featured,
+            latest: req.body.latest !== undefined
+                ? req.body.latest
+                : recipe.latest,
+            popular: req.body.popular !== undefined
+                ? req.body.popular
+                : recipe.popular,
+
+            // Template Information
+            templateID: req.body.templateID || recipe.templateID,
+            templateString: req.body.templateString[1] || recipe.templateString,
+
+            // Author is kept as the current user
+            author: req.user.userId,
+
+            updatedAt: Date.now()
+        };
+
+
         const updatedRecipe = await Recipe.findByIdAndUpdate(
             req.params.id,
-            {
-                ...req.body,
-                images: updatedImages,
-            },
-            { new: true, runValidators: true }
+            { $set: updatedData },
+            { new: true } // Return the updated document
         );
 
         // Handle template changes
@@ -309,13 +415,13 @@ export const getImages = async (req, res) => {
     const recipeId = req.params.id;
 
     try {
-      const recipe = await Recipe.findById(recipeId);
-      if (!recipe) {
-        return res.status(404).json({ message: 'Recipe not found' });
-      }
-      return res.json(recipe.images);  // Return the images array
+        const recipe = await Recipe.findById(recipeId);
+        if (!recipe) {
+            return res.status(404).json({ message: 'Recipe not found' });
+        }
+        return res.json(recipe.images);  // Return the images array
     } catch (error) {
-      console.error('Error fetching images:', error);
-      res.status(500).json({ message: 'Server error' });
+        console.error('Error fetching images:', error);
+        res.status(500).json({ message: 'Server error' });
     }
 };
