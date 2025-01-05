@@ -120,18 +120,27 @@ export const getAllRecipes = async (req, res) => {
         const {
             page = 1,
             limit = 10,
+            featured,
+            popular,
+            latest,
             category
         } = req.query;
 
         const filter = {};
         if (category) filter.category = category;
+        if (category) filter.category = category;
+        if (featured === 'true') filter.featured = true;
+        if (popular === 'true') filter.popular = true;
+        if (latest === 'true') {
+            return await getLatestRecipes();
+        }
 
         // Find recipes with filtering, pagination, and population
         const recipes = await Recipe.find(filter)
             .limit(limit * 1)
             .skip((page - 1) * limit)
             .populate('author', 'username') // Get author's username
-            .sort({ createdAt: -1 }); // Sort by most recent first
+            .sort({ createdAt: -1 });
 
         // Count total recipes for pagination
         const total = await Recipe.countDocuments(filter);
@@ -159,6 +168,19 @@ export const getAllRecipes = async (req, res) => {
             error: error.message
         });
     }
+};
+
+const getLatestRecipes = async () => {
+    const timeAgo = new Date();
+    timeAgo.setDate(timeAgo.getDate() - 7); // Last 7 days
+
+    const recipes = await Recipe.find({
+        createdAt: { $gte: timeAgo }
+    })
+    .populate('author', 'username')
+    .sort({ createdAt: -1 });
+
+    return recipes;
 };
 
 // Get a single recipe by ID
