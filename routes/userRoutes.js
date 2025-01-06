@@ -25,7 +25,7 @@ router.get('/:id/recipes/created', getUserCreatedRecipes);
 
 router.get('/:id/recipes/saved', getUserSavedRecipes);
 
-router.delete('/:id', authenticateToken, deleteUserAccount)
+router.delete('/delete/:id', authenticateToken, deleteUserAccount)
 
 router.patch('/:id', authenticateToken, updateUserProfile);
 

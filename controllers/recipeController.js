@@ -128,22 +128,28 @@ export const getAllRecipes = async (req, res) => {
 
         const filter = {};
         if (category) filter.category = category;
-        if (category) filter.category = category;
         if (featured === 'true') filter.featured = true;
         if (popular === 'true') filter.popular = true;
+
+        let recipes;
+        let total;
+
         if (latest === 'true') {
-            return await getLatestRecipes();
+            // Get latest recipes using the helper function
+            const { recipes: latestRecipes, total: latestTotal } = await getLatestRecipes(filter, page, limit);
+            recipes = latestRecipes;
+            total = latestTotal;
+        } else {
+            // Find recipes with filtering, pagination, and population
+            recipes = await Recipe.find(filter)
+                .limit(limit * 1)
+                .skip((page - 1) * limit)
+                .populate('author', 'username')
+                .sort({ createdAt: -1 });
+
+            // Count total recipes for pagination
+            total = await Recipe.countDocuments(filter);
         }
-
-        // Find recipes with filtering, pagination, and population
-        const recipes = await Recipe.find(filter)
-            .limit(limit * 1)
-            .skip((page - 1) * limit)
-            .populate('author', 'username') // Get author's username
-            .sort({ createdAt: -1 });
-
-        // Count total recipes for pagination
-        const total = await Recipe.countDocuments(filter);
 
         const recipesWithUrls = await Promise.all(
             recipes.map(async (recipe) => {
@@ -170,17 +176,26 @@ export const getAllRecipes = async (req, res) => {
     }
 };
 
-const getLatestRecipes = async () => {
+const getLatestRecipes = async (filter, page, limit) => {
     const timeAgo = new Date();
     timeAgo.setDate(timeAgo.getDate() - 7); // Last 7 days
 
-    const recipes = await Recipe.find({
+    // Combine the date filter with any existing filters
+    const dateFilter = {
+        ...filter,
         createdAt: { $gte: timeAgo }
-    })
-    .populate('author', 'username')
-    .sort({ createdAt: -1 });
+    };
 
-    return recipes;
+    const recipes = await Recipe.find(dateFilter)
+        .limit(limit * 1)
+        .skip((page - 1) * limit)
+        .populate('author', 'username')
+        .sort({ createdAt: -1 });
+
+    // Count total recipes for pagination
+    const total = await Recipe.countDocuments(dateFilter);
+
+    return { recipes, total };
 };
 
 // Get a single recipe by ID

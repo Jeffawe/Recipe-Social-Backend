@@ -312,7 +312,7 @@ export const getOrCreateDeletedUser = async () => {
 export const deleteUserAccount = async (req, res, next) => {
   try {
     // Verify the user is deleting their own account
-    if (req.user.id !== req.params.id) {
+    if (req.user.userId !== req.params.id) {
       throw new StatusError('Not authorized to delete this account', 403);
     }
 
