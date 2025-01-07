@@ -62,7 +62,7 @@ export const authController = {
     try {
       // The user's token will be available in req.user because of your auth middleware
       const user = await User.findById(req.user.userId)
-        .select('-password'); // Exclude password from the response
+        .select('-password -isSystem -isTestUser'); // Exclude password from the response
 
       if (!user) {
         return res.status(404).json({ error: 'User not found' });

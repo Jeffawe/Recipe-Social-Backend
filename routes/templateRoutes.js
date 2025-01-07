@@ -23,7 +23,7 @@ router.put('/:id', getUserTemplate);
 router.get('/public', getAllTemplates);
 
 // Get logged-in user's templates (both private and public)
-router.get('/user/templates', getUserTemplates);
+router.get('/user/:id', getUserTemplates);
 
 router.post('/save', saveTemplate);
 
