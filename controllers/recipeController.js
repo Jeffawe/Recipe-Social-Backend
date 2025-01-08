@@ -100,7 +100,7 @@ export const createRecipe = async (req, res) => {
 
         if (req.body.templateID) {
             await Template.findByIdAndUpdate(req.body.templateID, {
-                $inc: { recipeCount: 1 }
+                $push: { recipeCount: savedRecipe._id }
             });
         }
 
@@ -235,8 +235,12 @@ export const updateRecipe = async (req, res) => {
         }
 
         if (recipe.author.toString() !== req.user.userId.toString()) {
-            return res.status(403).json({ message: 'Not authorized to update this recipe' });
+            if(!req.isAdmin){
+                return res.status(403).json({ message: 'Not authorized to update this recipe' });
+            }   
         }
+
+        const author = (req.isAdmin) ? recipe.author : req.user.userId
 
         let uploadedImages = [];
         let existingImages = [];
@@ -254,9 +258,6 @@ export const updateRecipe = async (req, res) => {
         }
 
         const updatedImages = [...existingImages, ...uploadedImages];
-
-        const oldTemplateId = recipe.templateID;
-        const newTemplateId = req.body.templateID;
 
         const updatedData = {
             title: req.body.title || recipe.title,
@@ -306,7 +307,7 @@ export const updateRecipe = async (req, res) => {
             templateString: req.body.templateString[1] || recipe.templateString,
 
             // Author is kept as the current user
-            author: req.user.userId,
+            author: author,
 
             updatedAt: Date.now()
         };
@@ -318,18 +319,26 @@ export const updateRecipe = async (req, res) => {
             { new: true } // Return the updated document
         );
 
+        const oldTemplateId = recipe.templateID;
+        const newTemplateId = req.body.templateID;
+
         // Handle template changes
         if (oldTemplateId && oldTemplateId.toString() !== newTemplateId?.toString()) {
-            // Decrement count for old template
-            await Template.findByIdAndUpdate(oldTemplateId, { $inc: { recipeCount: -1 } });
-
-            // Remove private templates with 0 recipes
-            await Template.deleteMany({ public: false, recipeCount: { $lte: 0 } });
+            await Template.findByIdAndUpdate(oldTemplateId, {
+                $pull: { recipeCount: recipe.user_id }  // assuming recipe.user_id is the user's ID
+            });
+        
+            // Remove private templates with empty recipeCount array
+            await Template.deleteMany({
+                public: false,
+                recipeCount: { $size: 0 }  // checks if array is empty
+            });
         }
 
         if (newTemplateId && oldTemplateId?.toString() !== newTemplateId.toString()) {
-            // Increment count for new template
-            await Template.findByIdAndUpdate(newTemplateId, { $inc: { recipeCount: 1 } });
+            await Template.findByIdAndUpdate(newTemplateId, {
+                $addToSet: { recipeCount: recipe.user_id }  // using addToSet to prevent duplicates
+            });
         }
 
         res.json({
@@ -354,7 +363,9 @@ export const deleteRecipe = async (req, res) => {
         }
 
         if (recipe.author.toString() !== req.user.userId.toString()) {
-            return res.status(403).json({ message: 'Not authorized to delete this recipe' });
+            if(!req.isAdmin){
+                return res.status(403).json({ message: 'Not authorized to update this recipe' });
+            }  
         }
 
         const templateId = recipe.templateID;
@@ -363,11 +374,16 @@ export const deleteRecipe = async (req, res) => {
         await Recipe.findByIdAndDelete(req.params.id);
 
         if (templateId) {
-            // Decrement count for the associated template
-            await Template.findByIdAndUpdate(templateId, { $inc: { recipeCount: -1 } });
-
-            // Remove private templates with 0 recipes
-            await Template.deleteMany({ public: false, recipeCount: { $lte: 0 } });
+            // Remove this user's ID from the template's recipeCount array
+            await Template.findByIdAndUpdate(templateId, {
+                $pull: { recipeCount: recipe.user_id }  // assuming recipe.user_id is the user's ID
+            });
+        
+            // Remove private templates that have no users
+            await Template.deleteMany({
+                public: false,
+                recipeCount: { $size: 0 }  // checks if array is empty
+            });
         }
 
         res.json({ message: 'Recipe deleted successfully' });

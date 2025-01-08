@@ -19,10 +19,11 @@ const TemplateSchema = new mongoose.Schema({
         type: Boolean,
         required: true
     },
-    recipeCount: {
-        type: Number,
-        default: 0 // Initialize to 0
-    }
+
+    recipeCount: [{
+        type: String,
+        default: []
+    }]
 })
 
 export default mongoose.model('Templates', TemplateSchema);

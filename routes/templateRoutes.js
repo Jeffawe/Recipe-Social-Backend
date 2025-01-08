@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/auth.js'; 
+import { authenticateToken, isAdmin } from '../middleware/auth.js'; 
 import {
     createTemplate,
     getAllTemplates,
@@ -20,17 +20,17 @@ router.post('/', createTemplate);
 
 router.put('/:id', getUserTemplate);
 
-router.get('/public', getAllTemplates);
+router.get('/public', isAdmin, getAllTemplates);
 
 // Get logged-in user's templates (both private and public)
-router.get('/user/:id', getUserTemplates);
+router.get('/user/:id', isAdmin, getUserTemplates);
 
 router.post('/save', saveTemplate);
 
 // Update a template
-router.put('/:id', updateTemplate);
+router.put('/update/:id/', isAdmin, updateTemplate);
 
 // Delete a template
-router.delete('/:id', deleteTemplate);
+router.delete('/:id', isAdmin, deleteTemplate);
 
 export default router;

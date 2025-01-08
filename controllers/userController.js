@@ -60,7 +60,6 @@ export const authController = {
   // Add this new verify endpoint
   async verify(req, res) {
     try {
-      // The user's token will be available in req.user because of your auth middleware
       const user = await User.findById(req.user.userId)
         .select('-password -isSystem -isTestUser'); // Exclude password from the response
 
@@ -359,6 +358,73 @@ export const deleteUserAccount = async (req, res, next) => {
     res.status(200).json({
       message: 'Account successfully deleted',
       success: true
+    });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAllUsers = async (req, res, next) => {
+  try {
+    // Parse query parameters with defaults
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const sortBy = req.query.sortBy || 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+    const search = req.query.search || '';
+
+    // Build filter object
+    const filter = {
+      isSystem: { $ne: false },
+      isTestUser: { $ne: false }
+    };
+
+    // Add search functionality if search term provided
+    if (search) {
+      filter.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Calculate skip value for pagination
+    const skip = (page - 1) * limit;
+
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder;
+
+    // Get total count for pagination
+    const totalUsers = await User.countDocuments(filter);
+
+    // Get users with pagination
+    const users = await User.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .select('-password -__v') // Exclude sensitive fields
+      .lean();
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalUsers / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
+
+    res.json({
+      users,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalUsers,
+        hasNextPage,
+        hasPrevPage,
+        limit
+      },
+      sortInfo: {
+        sortBy,
+        sortOrder: sortOrder === 1 ? 'asc' : 'desc'
+      }
     });
 
   } catch (error) {

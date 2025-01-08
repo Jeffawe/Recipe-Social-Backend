@@ -11,7 +11,7 @@ import {
   saveRecipe,
   getImages
 } from '../controllers/recipeController.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -42,9 +42,9 @@ router.get(':id/images', authenticateToken, getImages)
 router.get('/search', searchRecipes);
 
 // Route to update a recipe
-router.put('/:id', authenticateToken, upload.array('images', 5), updateRecipe);
+router.put('/:id', authenticateToken, isAdmin, upload.array('images', 5), updateRecipe);
 
 // Route to delete a recipe
-router.delete('/:id', authenticateToken, deleteRecipe);
+router.delete('/:id', authenticateToken, isAdmin, deleteRecipe);
 
 export default router;

@@ -16,3 +16,12 @@ export const authenticateToken = (req, res, next) => {
     return res.status(403).json({ error: 'Invalid token' });
   }
 };
+
+export const isAdmin = (req, res, next) => {
+  if (req.user && req.user.isSystem) {
+    req.isAdmin = true; 
+  } else {
+    req.isAdmin = false;
+  }
+  next(); 
+};

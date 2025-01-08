@@ -6,6 +6,7 @@ import cors from 'cors';
 import recipeRoutes from '../routes/recipeRoutes.js';
 import userRoutes from '../routes/userRoutes.js';
 import templateRoutes from '../routes/templateRoutes.js';
+import adminRoutes from '../routes/adminRoutes.js'
 
 // Create Express application
 const app = express();
@@ -30,6 +31,7 @@ app.get('/', (req, res) => {
 app.use('/api/recipes', recipeRoutes);
 app.use('/api/auth', userRoutes);
 app.use('/api/templates', templateRoutes);
+app.use('/api/admin', adminRoutes)
 
 // Global error handler (basic)
 app.use((err, req, res, next) => {
