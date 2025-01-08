@@ -6,8 +6,8 @@ import { getPresignedUrl } from './services/s3services.js';
 import Template from '../models/Template.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const SYSTEM_USERNAME = 'Deleted User';
-const SYSTEM_EMAIL = 'deleted@system.internal';
+const SYSTEM_USERNAME = process.env.SYSTEM_USERNAME;
+const SYSTEM_EMAIL = process.env.SYSTEM_EMAIL;
 
 export const authController = {
   async googleAuth(req, res) {
