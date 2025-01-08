@@ -19,9 +19,10 @@ const TemplateSchema = new mongoose.Schema({
         type: Boolean,
         required: true
     },
-
+    
     recipeCount: [{
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Recipe',
         default: []
     }]
 })

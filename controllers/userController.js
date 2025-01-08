@@ -6,8 +6,9 @@ import { getPresignedUrl } from './services/s3services.js';
 import Template from '../models/Template.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const SYSTEM_USERNAME = process.env.SYSTEM_USERNAME;
-const SYSTEM_EMAIL = process.env.SYSTEM_EMAIL;
+const USERNAME = process.env.SYSTEM_USERNAME;
+const EMAIL = process.env.SYSTEM_EMAIL;
+
 
 export const authController = {
   async googleAuth(req, res) {
@@ -287,13 +288,13 @@ export const getOrCreateDeletedUser = async () => {
   try {
     let deletedUser = await User.findOne({
       isSystem: true,
-      username: SYSTEM_USERNAME
+      username: process.env.SYSTEM_USERNAME
     });
 
     if (!deletedUser) {
       deletedUser = await User.create({
-        email: SYSTEM_EMAIL,
-        username: SYSTEM_USERNAME,
+        email: process.env.SYSTEM_EMAIL,
+        username: process.env.SYSTEM_USERNAME,
         password: Math.random().toString(36),
         isSystem: true,
         bio: 'This account represents content from deleted users.',
@@ -367,6 +368,10 @@ export const deleteUserAccount = async (req, res, next) => {
 
 export const getAllUsers = async (req, res, next) => {
   try {
+    if (!req.isAdmin) {
+      next(error);
+    }
+
     // Parse query parameters with defaults
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;

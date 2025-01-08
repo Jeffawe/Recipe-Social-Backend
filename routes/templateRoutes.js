@@ -7,7 +7,8 @@ import {
     getUserTemplates,
     updateTemplate,
     deleteTemplate,
-    saveTemplate
+    saveTemplate,
+    getEverySingleTemplates
 } from '../controllers/templateController.js';
 
 const router = express.Router();
@@ -21,6 +22,8 @@ router.post('/', createTemplate);
 router.put('/:id', getUserTemplate);
 
 router.get('/public', isAdmin, getAllTemplates);
+
+router.get('/admin/templates', authenticateToken, isAdmin, getEverySingleTemplates);
 
 // Get logged-in user's templates (both private and public)
 router.get('/user/:id', isAdmin, getUserTemplates);

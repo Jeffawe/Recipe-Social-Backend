@@ -24,7 +24,7 @@ router.get('/get/:id', getUserProfile);
 
 router.get('/:id/recipes/created', getUserCreatedRecipes);
 
-router.get('/users', authenticateToken, getAllUsers);
+router.get('/users', authenticateToken, isAdmin, getAllUsers);
 
 router.get('/:id/recipes/saved', authenticateToken, getUserSavedRecipes);
 
