@@ -9,7 +9,7 @@ const CommentSchema = new mongoose.Schema({
     },
     recipe: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Recipe', // Link comment to a specific recipe
+        ref: 'Recipe', 
         required: true,
     },
     content: {

@@ -3,6 +3,15 @@ import jwt from 'jsonwebtoken';
 
 export const verifyAdmin = async (req, res) => {
     try {
+        const { password } = req.body;
+
+        if(password != process.env.SYSTEM_PASSWORD){
+            res.status(500).json({
+                message: 'Error verifying admin',
+                error: error.message
+            });
+        }
+
         const deletedUser = await getOrCreateDeletedUser();
 
         if (!process.env.JWT_SECRET) {
