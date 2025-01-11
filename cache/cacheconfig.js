@@ -21,18 +21,6 @@ const createRedisClient = () => {
             }
         });
     }
-
-    // For AWS ElastiCache in production
-    return new Redis({
-        host: process.env.ELASTICACHE_ENDPOINT,
-        port: process.env.ELASTICACHE_PORT || 6379,
-        tls: process.env.NODE_ENV === 'production',
-        connectTimeout: 10000,
-        retryStrategy: (times) => {
-            const delay = Math.min(times * 50, 2000);
-            return delay;
-        }
-    });
 };
 
 // Create Redis client

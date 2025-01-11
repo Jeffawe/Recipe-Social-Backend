@@ -14,7 +14,6 @@ export const authController = {
   async googleAuth(req, res) {
     try {
       const { token } = req.body;
-      console.log('Received token:', token); // Add this to debug
 
       // Get user info from Google
       const response = await fetch(
@@ -28,7 +27,6 @@ export const authController = {
       }
 
       const userData = await response.json();
-      console.log('Google user data:', userData); // Add this to debug
 
       // Find or create user
       let user = await User.findOne({ email: userData.email });
