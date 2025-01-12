@@ -21,18 +21,16 @@ const createRedisClient = () => {
             const delay = Math.min(times * 50, 2000);
             return delay;
         },
+        password: process.env.REDIS_PASSWORD // Add this for both dev and prod
     };
 
     if (process.env.NODE_ENV === 'development') {
-        // Local development Redis configuration
         redisConfig.host = '127.0.0.1';
         redisConfig.port = 6379;
     } else {
-        // Production Redis configuration
         redisConfig.host = process.env.REDIS_HOST;
         redisConfig.port = process.env.REDIS_PORT || 6379;
-        redisConfig.password = process.env.REDIS_PASSWORD || undefined; // If your Redis instance requires a password
-        redisConfig.tls = process.env.REDIS_TLS === 'true' ? {} : undefined; // Enable TLS for secure Redis connections
+        redisConfig.tls = process.env.REDIS_TLS === 'true' ? {} : undefined;
     }
 
     return new Redis(redisConfig);
