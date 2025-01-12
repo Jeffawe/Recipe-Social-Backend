@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { json } from 'express';
 import { connect } from 'mongoose';
 import cors from 'cors';
@@ -15,7 +17,6 @@ import { likeQueue } from '../cache/cacheconfig.js';
 import { verifyApiKey } from '../controllers/services/apiKey.js';
 
 const app = express();
-dotenv.config();
 
 // Middleware
 app.use(helmet());

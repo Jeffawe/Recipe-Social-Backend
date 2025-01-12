@@ -1,5 +1,7 @@
 import Redis from 'ioredis';
 import Recipe from '../models/Recipe.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Cache durations in seconds
 export const CACHE_DURATIONS = {
@@ -33,8 +35,6 @@ const createRedisClient = () => {
         redisConfig.tls = process.env.REDIS_TLS === 'true' ? {} : undefined;
     }
 
-    console.log(process.env.REDIS_PASSWORD)
-    console.log(redisConfig.password)
     return new Redis(redisConfig);
 };
 

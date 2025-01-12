@@ -1,5 +1,7 @@
 import { getOrCreateDeletedUser } from './userController.js'
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export const verifyAdmin = async (req, res) => {
     try {
