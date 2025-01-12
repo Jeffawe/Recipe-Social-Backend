@@ -14,18 +14,28 @@ export const CACHE_DURATIONS = {
     TEMPLATES: 1800
 };
 
+// Create Redis client
 const createRedisClient = () => {
-    // For local development
+    const redisConfig = {
+        retryStrategy: (times) => {
+            const delay = Math.min(times * 50, 2000);
+            return delay;
+        },
+    };
+
     if (process.env.NODE_ENV === 'development') {
-        return new Redis({
-            host: 'localhost',
-            port: 6379,
-            retryStrategy: (times) => {
-                const delay = Math.min(times * 50, 2000);
-                return delay;
-            }
-        });
+        // Local development Redis configuration
+        redisConfig.host = '127.0.0.1';
+        redisConfig.port = 6379;
+    } else {
+        // Production Redis configuration
+        redisConfig.host = process.env.REDIS_HOST;
+        redisConfig.port = process.env.REDIS_PORT || 6379;
+        redisConfig.password = process.env.REDIS_PASSWORD || undefined; // If your Redis instance requires a password
+        redisConfig.tls = process.env.REDIS_TLS === 'true' ? {} : undefined; // Enable TLS for secure Redis connections
     }
+
+    return new Redis(redisConfig);
 };
 
 // Create Redis client

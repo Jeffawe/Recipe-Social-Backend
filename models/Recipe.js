@@ -91,15 +91,6 @@ const RecipeSchema = new mongoose.Schema({
       'Beverage'
     ]
   },
-  comments: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Comment'
-  }],
-
-  faqs: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FAQ'
-  }],
 
   likes: [{
     type: mongoose.Schema.Types.ObjectId,
