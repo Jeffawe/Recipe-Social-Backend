@@ -21,7 +21,7 @@ const createRedisClient = () => {
             const delay = Math.min(times * 50, 2000);
             return delay;
         },
-        password: process.env.REDIS_PASSWORD // Add this for both dev and prod
+        password: process.env.REDIS_PASSWORD
     };
 
     if (process.env.NODE_ENV === 'development') {
@@ -33,6 +33,8 @@ const createRedisClient = () => {
         redisConfig.tls = process.env.REDIS_TLS === 'true' ? {} : undefined;
     }
 
+    console.log(process.env.REDIS_PASSWORD)
+    console.log(redisConfig.password)
     return new Redis(redisConfig);
 };
 
