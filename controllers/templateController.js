@@ -1,3 +1,4 @@
+import { CACHE_DURATIONS, cacheUtils } from '../cache/cacheconfig.js';
 import Template from '../models/Template.js';
 
 export const createTemplate = async (req, res) => {
@@ -12,6 +13,17 @@ export const createTemplate = async (req, res) => {
         });
 
         await newTemplate.save();
+        const promises = [
+            cacheUtils.deleteCache(`user-templates:${req.user.userId}`),
+            cacheUtils.deleteCache(`user-template:${req.user.userId}`),
+            cacheUtils.clearCachePattern('templates:*')
+        ];
+        
+        if (isPublic) {
+            promises.push(cacheUtils.deleteCache('public-templates'));
+        }
+        
+        await Promise.all(promises);
         res.status(201).json(newTemplate);
     } catch (error) {
         res.status(500).json({ message: 'Error creating template', error });
@@ -47,6 +59,18 @@ export const saveTemplate = async (req, res) => {
         });
 
         await newTemplate.save();
+        const promises = [
+            cacheUtils.deleteCache(`user-templates:${req.user.userId}`),
+            cacheUtils.deleteCache(`user-template:${req.user.userId}`),
+            cacheUtils.clearCachePattern('templates:*')
+        ];
+        
+        if (isPublic) {
+            promises.push(cacheUtils.deleteCache('public-templates'));
+        }
+        
+        await Promise.all(promises);
+        
         res.status(201).json(newTemplate);
     } catch (error) {
         res.status(500).json({ message: 'Error saving template', error });
@@ -55,9 +79,17 @@ export const saveTemplate = async (req, res) => {
 
 export const getAllTemplates = async (req, res) => {
     try {
+        const cacheKey = 'public-templates';
+        const cachedRecipes = await cacheUtils.getCache(cacheKey);
+
+        if (cachedRecipes) {
+            return res.json(cachedRecipes); // Return cached saved recipes
+        }
+
         const templates = await Template.find({ public: true })
             .populate('author', 'username');
 
+        await cacheUtils.setCache(cacheKey, templates, CACHE_DURATIONS.TEMPLATES)
         res.json(templates);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching templates', error });
@@ -75,6 +107,19 @@ export const getEverySingleTemplates = async (req, res) => {
         const sortBy = req.query.sortBy || 'createdAt';
         const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
         const search = req.query.search || '';
+
+        const cacheKey = `templates:${JSON.stringify({
+            page,
+            limit,
+            sortBy,
+            sortOrder,
+            search
+        })}`;
+        const cachedRecipes = await cacheUtils.getCache(cacheKey);
+
+        if (cachedRecipes) {
+            return res.json(cachedRecipes); // Return cached saved recipes
+        }
 
         // Build filter object
         const filter = {};
@@ -107,7 +152,7 @@ export const getEverySingleTemplates = async (req, res) => {
         const hasNextPage = page < totalPages;
         const hasPrevPage = page > 1;
 
-        return res.json({
+        const response = {
             templates,
             pagination: {
                 currentPage: page,
@@ -121,7 +166,11 @@ export const getEverySingleTemplates = async (req, res) => {
                 sortBy,
                 sortOrder: sortOrder === 1 ? 'asc' : 'desc'
             }
-        });
+        }
+
+        await cacheUtils.setCache(cacheKey, response, CACHE_DURATIONS.TEMPLATES)
+
+        return res.json(response);
 
     } catch (error) {
         return res.status(500).json({
@@ -134,10 +183,19 @@ export const getEverySingleTemplates = async (req, res) => {
 export const getUserTemplates = async (req, res) => {
     try {
         const userId = req.user.userId;
+
+        const cacheKey = `user-templates:${userId}`;
+        const cachedRecipes = await cacheUtils.getCache(cacheKey);
+
+        if (cachedRecipes) {
+            return res.json(cachedRecipes); // Return cached saved recipes
+        }
+
         const templates = await Template.find({
             author: userId
         }).populate('author', 'username');
 
+        await cacheUtils.setCache(cacheKey, templates, CACHE_DURATIONS.TEMPLATES)
         res.json(templates);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching templates', error });
@@ -149,6 +207,14 @@ export const getUserTemplate = async (req, res) => {
         const { id } = req.params;
         const userId = req.user.userId;
 
+        const cacheKey = `user-template:${userId}`;
+        const cachedRecipes = await cacheUtils.getCache(cacheKey);
+
+        if (cachedRecipes) {
+            return res.json(cachedRecipes); // Return cached saved recipes
+        }
+
+
         const template = await Template.findOne({
             _id: id,
             author: userId
@@ -157,7 +223,7 @@ export const getUserTemplate = async (req, res) => {
         if (!template) {
             return res.status(404).json({ message: 'Template not found or unauthorized' });
         }
-
+        await cacheUtils.setCache(cacheKey, template, CACHE_DURATIONS.TEMPLATES)
         res.json(template);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching template', error });
@@ -209,6 +275,13 @@ export const deleteTemplate = async (req, res) => {
         if (!deletedTemplate) {
             return res.status(404).json({ message: 'Template not found or unauthorized' });
         }
+
+        await Promise.all([
+            cacheUtils.deleteCache(`user-templates:${req.user.userId}`),
+            cacheUtils.deleteCache(`user-template:${req.user.userId}`),
+            cacheUtils.deleteCache('public-templates'),
+            cacheUtils.clearCachePattern('templates:*'),
+        ]);
 
         res.json({ message: 'Template deleted successfully' });
     } catch (error) {

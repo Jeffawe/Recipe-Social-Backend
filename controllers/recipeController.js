@@ -1,7 +1,8 @@
-import { uploadImagesToS3, getPresignedUrl } from './services/s3services.js';
+import { uploadImagesToS3, getPresignedUrl, enhanceRecipeWithUrls } from './services/s3services.js';
 import Recipe from '../models/Recipe.js';
 import User from '../models/User.js';
 import Template from '../models/Template.js';
+import { cacheUtils, CACHE_DURATIONS } from '../cache/cacheconfig.js'
 
 export const createRecipe = async (req, res) => {
     try {
@@ -65,6 +66,7 @@ export const createRecipe = async (req, res) => {
                 });
             }
         }
+
         let uploadedImages = [];
         if (req.files && req.files.length > 0) {
             uploadedImages = await uploadImagesToS3(req.files);
@@ -104,6 +106,23 @@ export const createRecipe = async (req, res) => {
             });
         }
 
+        const recipeWithUrls = await enhanceRecipeWithUrls(savedRecipe);
+        await cacheUtils.setCache(
+            `recipe:${savedRecipe._id}`,
+            recipeWithUrls,
+            CACHE_DURATIONS.SINGLE_RECIPE
+        );
+
+        // Clear list caches
+        await Promise.all([
+            cacheUtils.deleteCache(`user:${req.user.userId}:createdRecipes`),
+            cacheUtils.clearCachePattern('recipes:*'),
+            cacheUtils.deleteCache(`user:${req.user.userId}`),
+            cacheUtils.clearCachePattern('latest:*'),
+            cacheUtils.clearCachePattern(`category:${req.body.category}:*`),
+            cacheUtils.clearCachePattern('search:*')
+        ]);
+
         res.status(201).json(savedRecipe);
     } catch (error) {
         res.status(500).json({
@@ -125,6 +144,42 @@ export const getAllRecipes = async (req, res) => {
             latest,
             category
         } = req.query;
+
+        const cacheKey = `recipes:${JSON.stringify({
+            page,
+            limit,
+            featured,
+            popular,
+            latest,
+            category
+        })}`;
+
+        // Check if the data is cached
+        let cachedData = await cacheUtils.getCache(cacheKey);
+        if (cachedData) {
+            // Parse cached data
+            cachedData = JSON.parse(cachedData);
+
+            // Extract recipe IDs from cached data
+            const recipeIds = cachedData.recipes.map((recipe) => recipe._id);
+
+            // Fetch cached like counts in bulk
+            const recipeLikeKeys = recipeIds.map((id) => `recipe-likes:${id}`);
+            const cachedLikes = await cacheUtils.mget(recipeLikeKeys);
+
+            if (!cachedLikes || cachedLikes.every((like) => like === null)) {
+                return res.json(cachedData);
+            }
+
+            // Update likes in cached data
+            cachedData.recipes = cachedData.recipes.map((recipe, index) => ({
+                ...recipe,
+                likes: cachedLikes[index] ? parseInt(cachedLikes[index], 10) : 0, // Default to 0 if not cached
+            }));
+
+            // Return the updated cached data
+            return res.json(cachedData);
+        }
 
         const filter = {};
         if (category) filter.category = category;
@@ -151,6 +206,16 @@ export const getAllRecipes = async (req, res) => {
             total = await Recipe.countDocuments(filter);
         }
 
+        const recipeIds = recipes.map((recipe) => recipe._id);
+
+        // Fetch cached like counts in bulk
+        const recipeLikeKeys = recipeIds.map((id) => `recipe-likes:${id}`);
+        const cachedLikes = await cacheUtils.mget(recipeLikeKeys);
+
+        const likes = cachedLikes && cachedLikes.length > 0
+            ? cachedLikes.map((like) => (like ? parseInt(like, 10) : 0))
+            : [];
+
         const recipesWithUrls = await Promise.all(
             recipes.map(async (recipe) => {
                 const imagesWithUrls = await Promise.all(
@@ -163,11 +228,21 @@ export const getAllRecipes = async (req, res) => {
             })
         );
 
-        res.json({
+        const response = {
             recipes: recipesWithUrls,
+            likes: likes,
             totalPages: Math.ceil(total / limit),
             currentPage: page
-        });
+        };
+
+        // Cache the response
+        await cacheUtils.setCache(
+            cacheKey,
+            response,
+            latest === 'true' ? CACHE_DURATIONS.LATEST_RECIPES : CACHE_DURATIONS.RECIPE_LIST
+        );
+
+        res.json(response);
     } catch (error) {
         res.status(500).json({
             message: 'Error fetching recipes',
@@ -201,6 +276,13 @@ const getLatestRecipes = async (filter, page, limit) => {
 // Get a single recipe by ID
 export const getSingleRecipe = async (req, res) => {
     try {
+        const cacheKey = `recipe:${req.params.id}`;
+
+        const cachedRecipe = await cacheUtils.getCache(cacheKey);
+        if (cachedRecipe) {
+            return res.json(cachedRecipe);
+        }
+
         // Find recipe by ID and populate related data
         const recipe = await Recipe.findById(req.params.id)
             .populate('author', 'username email');
@@ -217,7 +299,12 @@ export const getSingleRecipe = async (req, res) => {
             })
         );
 
-        res.json({ ...recipe.toObject(), images: imagesWithUrls });
+        const response = { ...recipe.toObject(), images: imagesWithUrls };
+
+        // Cache the response
+        await cacheUtils.setCache(cacheKey, response, CACHE_DURATIONS.SINGLE_RECIPE);
+
+        res.json(response);
     } catch (error) {
         res.status(500).json({
             message: 'Error fetching recipe',
@@ -235,9 +322,9 @@ export const updateRecipe = async (req, res) => {
         }
 
         if (recipe.author.toString() !== req.user.userId.toString()) {
-            if(!req.isAdmin){
+            if (!req.isAdmin) {
                 return res.status(403).json({ message: 'Not authorized to update this recipe' });
-            }   
+            }
         }
 
         const author = (req.isAdmin) ? recipe.author : req.user.userId
@@ -327,7 +414,7 @@ export const updateRecipe = async (req, res) => {
             await Template.findByIdAndUpdate(oldTemplateId, {
                 $pull: { recipeCount: recipe.user_id }  // assuming recipe.user_id is the user's ID
             });
-        
+
             // Remove private templates with empty recipeCount array
             await Template.deleteMany({
                 public: false,
@@ -340,6 +427,22 @@ export const updateRecipe = async (req, res) => {
                 $addToSet: { recipeCount: recipe.user_id }  // using addToSet to prevent duplicates
             });
         }
+
+        const recipeWithUrls = await enhanceRecipeWithUrls(updatedRecipe);
+        await Promise.all([
+            cacheUtils.setCache(
+                `recipe:${req.params.id}`,
+                recipeWithUrls,
+                CACHE_DURATIONS.SINGLE_RECIPE
+            ),
+            cacheUtils.deleteCache(`user:${req.user.userId}`),
+            cacheUtils.deleteCache(`user:${req.user.userId}:createdRecipes`),
+            cacheUtils.clearCachePattern('recipes:*'),
+            cacheUtils.clearCachePattern(`user:${author}:*`),
+            cacheUtils.clearCachePattern('latest:*'),
+            cacheUtils.clearCachePattern(`category:${updatedData.category}:*`),
+            cacheUtils.clearCachePattern('search:*')
+        ]);
 
         res.json({
             message: 'Recipe updated successfully',
@@ -363,9 +466,9 @@ export const deleteRecipe = async (req, res) => {
         }
 
         if (recipe.author.toString() !== req.user.userId.toString()) {
-            if(!req.isAdmin){
+            if (!req.isAdmin) {
                 return res.status(403).json({ message: 'Not authorized to update this recipe' });
-            }  
+            }
         }
 
         const templateId = recipe.templateID;
@@ -378,13 +481,22 @@ export const deleteRecipe = async (req, res) => {
             await Template.findByIdAndUpdate(templateId, {
                 $pull: { recipeCount: recipe.user_id }  // assuming recipe.user_id is the user's ID
             });
-        
+
             // Remove private templates that have no users
             await Template.deleteMany({
                 public: false,
                 recipeCount: { $size: 0 }  // checks if array is empty
             });
         }
+
+        await Promise.all([
+            cacheUtils.deleteCache(`recipe:${req.params.id}`),
+            cacheUtils.clearCachePattern('recipes:*'),
+            cacheUtils.deleteCache(`user:${req.user.userId}`),
+            cacheUtils.clearCachePattern('latest:*'),
+            cacheUtils.clearCachePattern(`category:${category}:*`),
+            cacheUtils.clearCachePattern('search:*')
+        ]);
 
         res.json({ message: 'Recipe deleted successfully' });
     } catch (error) {
@@ -399,6 +511,13 @@ export const deleteRecipe = async (req, res) => {
 export const searchRecipes = async (req, res) => {
     try {
         const { query } = req.query;
+        const cacheKey = `search:${query}`;
+
+        // Check cache first
+        const cachedResults = await cacheUtils.getCache(cacheKey);
+        if (cachedResults) {
+            return res.json(cachedResults);
+        }
 
         // Perform text search
         const recipes = await Recipe.find(
@@ -408,6 +527,7 @@ export const searchRecipes = async (req, res) => {
             .sort({ score: { $meta: "textScore" } })
             .limit(10);
 
+        await cacheUtils.setCache(cacheKey, recipes, CACHE_DURATIONS.RECIPE_LIST);
         res.json(recipes);
     } catch (error) {
         res.status(500).json({
@@ -419,29 +539,77 @@ export const searchRecipes = async (req, res) => {
 
 export const likeRecipe = async (req, res) => {
     try {
-        const recipe = await Recipe.findById(req.params.id);
-        const user = req.user.userId;
+        const recipeId = req.params.id;
+        const userId = req.user.userId;
 
-        const isLiked = recipe.likes.includes(user);
-        const update = isLiked
-            ? { $pull: { likes: user } }
-            : { $addToSet: { likes: user } };
+        // Check if the user has already liked the recipe
+        const userLikesKey = `recipe-user-likes:${userId}`;
+        const userLikedRecipes = await cacheUtils.getCache(userLikesKey) || [];
+        const hasLiked = userLikedRecipes.includes(recipeId);
 
-        const updatedRecipe = await Recipe.findByIdAndUpdate(
-            req.params.id,
-            update,
-            { new: true }
-        );
+        // Get current like count from cache
+        const recipeLikesKey = `recipe-likes:${recipeId}`;
+        let currentLikes = (await cacheUtils.getCache(recipeLikesKey)) || 0;
+
+        if (hasLiked) {
+            // Unlike the recipe
+            currentLikes--;
+            const updatedUserLikes = userLikedRecipes.filter((id) => id !== recipeId);
+            await Promise.all([
+                cacheUtils.setCache(userLikesKey, updatedUserLikes, CACHE_DURATIONS.LIKE_STATUS),
+                cacheUtils.setCache(recipeLikesKey, currentLikes, CACHE_DURATIONS.RECIPE_LIKE_COUNT),
+                likeQueue.add(recipeId, userId, 'remove') // Add DB update task to queue
+            ]);
+        } else {
+            // Like the recipe
+            currentLikes++;
+            const updatedUserLikes = [...userLikedRecipes, recipeId];
+            await Promise.all([
+                cacheUtils.setCache(userLikesKey, updatedUserLikes, CACHE_DURATIONS.USER_LIKE_STATUS),
+                cacheUtils.setCache(recipeLikesKey, currentLikes, CACHE_DURATIONS.RECIPE_LIKE_COUNT),
+                likeQueue.add(recipeId, userId, 'add') // Add DB update task to queue
+            ]);
+        }
 
         res.json({
             success: true,
-            likes: updatedRecipe.likes.length,
-            isLiked: !isLiked
+            likes: currentLikes,
+            isLiked: !hasLiked
         });
     } catch (error) {
+        console.error('Like Recipe Error:', error);
         res.status(500).json({ message: error.message });
     }
 };
+
+// export const likeRecipe = async (req, res) => {
+//     try {
+//         const user = req.user.userId;
+
+//         // Cache keys
+//         const likeCacheKey = `like:${req.params.id}:${user}`;
+//         const likeCountKey = `likeCount:${req.params.id}`
+
+//         const isLiked = recipe.likes.includes(user);
+//         const update = isLiked
+//             ? { $pull: { likes: user } }
+//             : { $addToSet: { likes: user } };
+
+//         const updatedRecipe = await Recipe.findByIdAndUpdate(
+//             req.params.id,
+//             update,
+//             { new: true }
+//         );
+
+//         res.json({
+//             success: true,
+//             likes: updatedRecipe.likes.length,
+//             isLiked: !isLiked
+//         });
+//     } catch (error) {
+//         res.status(500).json({ message: error.message });
+//     }
+// };
 
 export const saveRecipe = async (req, res) => {
     try {
@@ -465,14 +633,29 @@ export const saveRecipe = async (req, res) => {
 };
 
 export const getImages = async (req, res) => {
-    const recipeId = req.params.id;
-
     try {
+        const recipeId = req.params.id;
+        const cacheKey = `images:${recipeId}`;
+        const cachedImages = await cacheUtils.getCache(cacheKey);
+        if (cachedImages) {
+            return res.json(cachedImages);
+        }
+
         const recipe = await Recipe.findById(recipeId);
         if (!recipe) {
             return res.status(404).json({ message: 'Recipe not found' });
         }
-        return res.json(recipe.images);  // Return the images array
+        const imagesWithUrls = await Promise.all(
+            recipe.images.map(async (image) => {
+                const url = await getPresignedUrl(image.fileName);
+                return { ...image.toObject(), url };
+            })
+        );
+
+        // Cache the images with URLs
+        await cacheUtils.setCache(cacheKey, imagesWithUrls, CACHE_DURATIONS.SINGLE_RECIPE);
+
+        return res.json(imagesWithUrls);
     } catch (error) {
         console.error('Error fetching images:', error);
         res.status(500).json({ message: 'Server error' });

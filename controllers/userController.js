@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import { StatusError } from './utils/Error.js';
 import { getPresignedUrl } from './services/s3services.js';
 import Template from '../models/Template.js';
+import { cacheUtils } from '../cache/cacheconfig.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const USERNAME = process.env.SYSTEM_USERNAME;
@@ -59,12 +60,22 @@ export const authController = {
   // Add this new verify endpoint
   async verify(req, res) {
     try {
-      const user = await User.findById(req.user.userId)
+      const userId = req.user.userId;
+      const cachedUser = await cacheUtils.getCache(`user:${userId}`);
+
+      if (cachedUser) {
+        return res.json(cachedUser); // Return cached user
+      }
+      
+      const user = await User.findById(userId)
         .select('-password -isSystem -isTestUser'); // Exclude password from the response
 
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
+
+      // Cache the user data
+      await cacheUtils.setCache(`user:${userId}`, user, CACHE_DURATIONS.USER_PROFILE);
 
       res.json(user);
     } catch (error) {
@@ -114,6 +125,7 @@ export const authController = {
         { expiresIn: '7d' }
       );
 
+      await cacheUtils.clearCachePattern('user:*')
       res.status(201).json({ token, user });
 
     } catch (error) {
@@ -157,7 +169,14 @@ export const authController = {
 
 export const getUserProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id)
+    const userId = req.params.id;
+    const cachedUser = await cacheUtils.getCache(`user:${userId}`);
+
+    if (cachedUser) {
+      return res.json(cachedUser);
+    }
+
+    const user = await User.findById(userId)
       .select('-password -isTestUser -__v') // Exclude sensitive fields
       .lean();
 
@@ -165,6 +184,7 @@ export const getUserProfile = async (req, res, next) => {
       throw new StatusError('User not found', 404);
     }
 
+    await cacheUtils.setCache(`user:${userId}`, user, CACHE_DURATIONS.USER_PROFILE);
     res.json(user);
   } catch (error) {
     next(error);
@@ -174,7 +194,14 @@ export const getUserProfile = async (req, res, next) => {
 
 export const getUserCreatedRecipes = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id)
+    const userId = req.params.id;
+    const cachedRecipes = await cacheUtils.getCache(`user:${userId}:createdRecipes`);
+
+    if (cachedRecipes) {
+      return res.json(cachedRecipes); // Return cached recipes
+    }
+
+    const user = await User.findById(userId)
       .populate({
         path: 'createdRecipes',
         select: 'title description images cookingTime difficulty createdAt',
@@ -204,6 +231,8 @@ export const getUserCreatedRecipes = async (req, res, next) => {
       )
       : [];
 
+    // Cache the updated recipes
+    await cacheUtils.setCache(`user:${userId}:createdRecipes`, updatedRecipes, CACHE_DURATIONS.RECIPE_LIST);
     res.json(updatedRecipes);
   } catch (error) {
     next(error);
@@ -212,7 +241,14 @@ export const getUserCreatedRecipes = async (req, res, next) => {
 
 export const getUserSavedRecipes = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id)
+    const userId = req.params.id;
+    const cachedRecipes = await cacheUtils.getCache(`user:${userId}:savedRecipes`);
+
+    if (cachedRecipes) {
+      return res.json(cachedRecipes); // Return cached saved recipes
+    }
+
+    const user = await User.findById(userId)
       .populate({
         path: 'savedRecipes',
         select: 'title description images cookingTime createdAt',
@@ -242,6 +278,8 @@ export const getUserSavedRecipes = async (req, res, next) => {
       )
       : [];
 
+    // Cache the updated saved recipes
+    await cacheUtils.setCache(`user:${userId}:savedRecipes`, updatedRecipes, CACHE_DURATIONS.RECIPE_LIST);
     res.json(updatedRecipes);
   } catch (error) {
     next(error);
@@ -275,6 +313,8 @@ export const updateUserProfile = async (req, res, next) => {
     if (!user) {
       throw new StatusError('User not found', 404);
     }
+
+    await cacheUtils.deleteCache(`user:${req.params.id}`);
 
     res.json(user);
   } catch (error) {
@@ -354,6 +394,11 @@ export const deleteUserAccount = async (req, res, next) => {
     // Finally, delete the user
     await User.findByIdAndDelete(req.params.id);
 
+    await Promise.all([
+      cacheUtils.deleteCache(`user:${req.params.id}`),
+      cacheUtils.clearCachePattern('user:*')
+    ]);
+
     res.status(200).json({
       message: 'Account successfully deleted',
       success: true
@@ -367,7 +412,7 @@ export const deleteUserAccount = async (req, res, next) => {
 export const getAllUsers = async (req, res, next) => {
   try {
     if (!req.isAdmin) {
-      next(error);
+      next("An Error Occured");
     }
 
     // Parse query parameters with defaults
@@ -376,6 +421,19 @@ export const getAllUsers = async (req, res, next) => {
     const sortBy = req.query.sortBy || 'createdAt';
     const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
     const search = req.query.search || '';
+
+    const cacheKey = `user:${JSON.stringify({
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+      search
+    })}`;
+    const cachedRecipes = await cacheUtils.getCache(cacheKey);
+
+    if (cachedRecipes) {
+      return res.json(cachedRecipes); // Return cached saved recipes
+    }
 
     // Build filter object
     const filter = {
@@ -414,7 +472,7 @@ export const getAllUsers = async (req, res, next) => {
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
 
-    res.json({
+    const response = {
       users,
       pagination: {
         currentPage: page,
@@ -428,7 +486,11 @@ export const getAllUsers = async (req, res, next) => {
         sortBy,
         sortOrder: sortOrder === 1 ? 'asc' : 'desc'
       }
-    });
+    }
+
+    await cacheUtils.setCache(cacheKey, response, CACHE_DURATIONS.USER_PROFILE);
+
+    res.json(response);
 
   } catch (error) {
     next(error);

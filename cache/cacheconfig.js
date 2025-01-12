@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import Recipe from '../models/Recipe.js';
 
 // Cache durations in seconds
 export const CACHE_DURATIONS = {
@@ -7,6 +8,10 @@ export const CACHE_DURATIONS = {
     LATEST_RECIPES: 300,      // 5 minutes
     CATEGORY_LIST: 3600,      // 1 hour
     USER_PROFILE: 1800,       // 30 minutes
+    LIKE_STATUS: 300,         // 5 minutes
+    SAVE_STATUS: 300,         // 5 minutes
+    SEARCH_RESULTS: 900,       // 15 minutes
+    TEMPLATES: 1800
 };
 
 const createRedisClient = () => {
@@ -104,6 +109,55 @@ export const cacheMiddleware = (duration) => {
             next();
         }
     };
+};
+
+// In your Redis config, add these methods
+export const likeQueue = {
+    add: async (recipeId, userId, action) => {
+        const key = 'like_queue';
+        await redisClient.hset(key, `${recipeId}:${userId}`, action);
+    },
+    
+    getLikeCount: async (recipeId) => {
+        const key = `recipe:${recipeId}:likes`;
+        return parseInt(await redisClient.get(key) || '0');
+    },
+    
+    processQueue: async () => {
+        const key = 'like_queue';
+        const batch = await redisClient.hgetall(key);
+        
+        if (!batch || Object.keys(batch).length === 0) return;
+        
+        try {
+            // Group by recipe for efficient updates
+            const updates = {};
+            for (const [key, action] of Object.entries(batch)) {
+                const [recipeId, userId] = key.split(':');
+                if (!updates[recipeId]) updates[recipeId] = { add: [], remove: [] };
+                updates[recipeId][action].push(userId);
+            }
+            
+            // Update DB in transaction
+            const session = await mongoose.startSession();
+            await session.withTransaction(async () => {
+                for (const [recipeId, actions] of Object.entries(updates)) {
+                    await Recipe.findByIdAndUpdate(recipeId, {
+                        $addToSet: { likes: { $each: actions.add } },
+                        $pull: { likes: { $in: actions.remove } }
+                    });
+                }
+                
+                // Clear processed items from Redis
+                await redisClient.del(key);
+            });
+            
+            session.endSession();
+        } catch (error) {
+            console.error('Error processing like queue:', error);
+            // Important: Don't clear Redis queue on error
+        }
+    }
 };
 
 export default redisClient;

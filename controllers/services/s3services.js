@@ -55,3 +55,13 @@ export const getPresignedUrl = async (fileName) => {
         throw new Error("Could not generate pre-signed URL");
     }
 };
+
+export const enhanceRecipeWithUrls = async (recipe) => {
+    const imagesWithUrls = await Promise.all(
+        recipe.images.map(async (image) => {
+            const url = await getPresignedUrl(image.fileName);
+            return { ...image.toObject(), url };
+        })
+    );
+    return { ...recipe.toObject(), images: imagesWithUrls };
+}
