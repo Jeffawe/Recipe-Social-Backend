@@ -5,15 +5,21 @@ const FAQSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true,
-        maxlength: 500 
+        maxlength: 500
     },
     answer: {
         type: String,
         required: true,
         trim: true,
-        maxlength: 2000 
+        maxlength: 2000
     },
-    order: {         
+    recipe: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Recipe',
+        required: true,
+        index: true  // Add this for better query performance
+    },
+    order: {
         type: Number,
         default: 0
     },

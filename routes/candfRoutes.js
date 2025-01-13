@@ -12,8 +12,8 @@ router.post('/comments/:commentId/like', authenticateToken, commentController.to
 
 // FAQ routes (with admin protection for CUD operations)
 router.post('/faqs', authenticateToken, faqController.createFAQ);
-router.get('/faqs', faqController.getAllFAQs);
-router.patch('/faqs/:faqId', authenticateToken, faqController.updateFAQ);
-router.delete('/faqs/:faqId', authenticateToken, faqController.deleteFAQ);
+router.get('/faqs/:id', faqController.getAllFAQs);
+router.patch('/faqs/update/:faqId', authenticateToken, faqController.updateFAQ);
+router.delete('/faqs/delete/:faqId', authenticateToken, faqController.deleteFAQ);
 
 export default router;

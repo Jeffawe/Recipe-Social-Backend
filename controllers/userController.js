@@ -300,7 +300,6 @@ export const updateUserProfile = async (req, res, next) => {
 
     // Make sure user can only update their own profile
     if (req.user.userId !== req.params.id) {
-      console.log
       throw new StatusError('Not authorized to update this profile', 403);
     }
 

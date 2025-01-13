@@ -72,6 +72,27 @@ export const cacheUtils = {
         }
     },
 
+    // Get multiple keys from cache
+    mget: async (keys) => {
+        if (!keys || !keys.length) return [];
+        
+        try {
+            const results = await redisClient.mget(keys);
+            return results.map(result => {
+                if (!result) return null;
+                try {
+                    return JSON.parse(result);
+                } catch (parseError) {
+                    console.error('Parse error for cached value:', parseError);
+                    return null;
+                }
+            });
+        } catch (error) {
+            console.error('Cache MGET Error:', error);
+            return [];
+        }
+    },
+
     // Delete specific cache
     deleteCache: async (key) => {
         try {
@@ -108,7 +129,7 @@ export const cacheMiddleware = (duration) => {
 
             // Store the original res.json function
             const originalJson = res.json;
-            res.json = function(data) {
+            res.json = function (data) {
                 cacheUtils.setCache(key, data, duration);
                 return originalJson.call(this, data);
             };
@@ -127,18 +148,18 @@ export const likeQueue = {
         const key = 'like_queue';
         await redisClient.hset(key, `${recipeId}:${userId}`, action);
     },
-    
+
     getLikeCount: async (recipeId) => {
         const key = `recipe:${recipeId}:likes`;
         return parseInt(await redisClient.get(key) || '0');
     },
-    
+
     processQueue: async () => {
         const key = 'like_queue';
         const batch = await redisClient.hgetall(key);
-        
+
         if (!batch || Object.keys(batch).length === 0) return;
-        
+
         try {
             // Group by recipe for efficient updates
             const updates = {};
@@ -147,7 +168,7 @@ export const likeQueue = {
                 if (!updates[recipeId]) updates[recipeId] = { add: [], remove: [] };
                 updates[recipeId][action].push(userId);
             }
-            
+
             // Update DB in transaction
             const session = await mongoose.startSession();
             await session.withTransaction(async () => {
@@ -157,11 +178,11 @@ export const likeQueue = {
                         $pull: { likes: { $in: actions.remove } }
                     });
                 }
-                
+
                 // Clear processed items from Redis
                 await redisClient.del(key);
             });
-            
+
             session.endSession();
         } catch (error) {
             console.error('Error processing like queue:', error);

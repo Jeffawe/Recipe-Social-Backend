@@ -14,7 +14,7 @@ import adminRoutes from '../routes/adminRoutes.js'
 import candfRoutes from '../routes/candfRoutes.js'
 
 import { likeQueue } from '../cache/cacheconfig.js';
-import { verifyApiKey } from '../controllers/services/apiKey.js';
+import { verifyApiKey } from '../middleware/apiKey.js';
 
 const app = express();
 

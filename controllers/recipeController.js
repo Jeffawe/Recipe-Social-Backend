@@ -145,40 +145,29 @@ export const getAllRecipes = async (req, res) => {
             category
         } = req.query;
 
-        const cacheKey = `recipes:${JSON.stringify({
-            page,
-            limit,
-            featured,
-            popular,
-            latest,
-            category
-        })}`;
+        const cacheKey = `recipes:${page}:${limit}:${featured}:${popular}:${latest}:${category}`;
 
-        // Check if the data is cached
-        let cachedData = await cacheUtils.getCache(cacheKey);
+        const cachedData = await cacheUtils.getCache(cacheKey);
         if (cachedData) {
-            // Parse cached data
-            cachedData = JSON.parse(cachedData);
+            const parsedData = cachedData;
 
-            // Extract recipe IDs from cached data
-            const recipeIds = cachedData.recipes.map((recipe) => recipe._id);
-
-            // Fetch cached like counts in bulk
+            // Fetch likes for cached recipes
+            const recipeIds = parsedData.recipes.map((recipe) => recipe._id);
             const recipeLikeKeys = recipeIds.map((id) => `recipe-likes:${id}`);
             const cachedLikes = await cacheUtils.mget(recipeLikeKeys);
 
-            if (!cachedLikes || cachedLikes.every((like) => like === null)) {
-                return res.json(cachedData);
+            if(!cachedLikes){
+                return res.json(cachedData)
             }
-
-            // Update likes in cached data
-            cachedData.recipes = cachedData.recipes.map((recipe, index) => ({
+            // Integrate likes into recipes
+            parsedData.recipes = parsedData.recipes.map((recipe, index) => ({
                 ...recipe,
-                likes: cachedLikes[index] ? parseInt(cachedLikes[index], 10) : 0, // Default to 0 if not cached
+                likes: cachedLikes[index]
+                    ? JSON.parse(cachedLikes[index]) // Parse array of likes
+                    : recipe.likes
             }));
 
-            // Return the updated cached data
-            return res.json(cachedData);
+            return res.json(parsedData);
         }
 
         const filter = {};
@@ -208,29 +197,44 @@ export const getAllRecipes = async (req, res) => {
 
         const recipeIds = recipes.map((recipe) => recipe._id);
 
-        // Fetch cached like counts in bulk
+        // Fetch likes for the recipes from Redis
         const recipeLikeKeys = recipeIds.map((id) => `recipe-likes:${id}`);
         const cachedLikes = await cacheUtils.mget(recipeLikeKeys);
 
-        const likes = cachedLikes && cachedLikes.length > 0
-            ? cachedLikes.map((like) => (like ? parseInt(like, 10) : 0))
-            : [];
-
-        const recipesWithUrls = await Promise.all(
-            recipes.map(async (recipe) => {
+        // Integrate likes into recipes
+        const recipesWithLikes = await Promise.all(
+            recipes.map(async (recipe, index) => {
                 const imagesWithUrls = await Promise.all(
                     recipe.images.map(async (image) => {
                         const url = await getPresignedUrl(image.fileName);
                         return { ...image.toObject(), url };
                     })
                 );
-                return { ...recipe.toObject(), images: imagesWithUrls };
+
+                return {
+                    ...recipe.toObject(),
+                    images: imagesWithUrls,
+                    likes: cachedLikes[index]
+                        ? JSON.parse(cachedLikes[index]) // Parse array of likes
+                        : recipe.likes
+                };
             })
         );
 
+        // const recipesWithUrls = await Promise.all(
+        //     recipes.map(async (recipe) => {
+        //         const imagesWithUrls = await Promise.all(
+        //             recipe.images.map(async (image) => {
+        //                 const url = await getPresignedUrl(image.fileName);
+        //                 return { ...image.toObject(), url };
+        //             })
+        //         );
+        //         return { ...recipe.toObject(), images: imagesWithUrls };
+        //     })
+        // );
+
         const response = {
-            recipes: recipesWithUrls,
-            likes: likes,
+            recipes: recipesWithLikes,
             totalPages: Math.ceil(total / limit),
             currentPage: page
         };
@@ -549,24 +553,24 @@ export const likeRecipe = async (req, res) => {
 
         // Get current like count from cache
         const recipeLikesKey = `recipe-likes:${recipeId}`;
-        let currentLikes = (await cacheUtils.getCache(recipeLikesKey)) || 0;
+        const recipeLikes = (await cacheUtils.getCache(recipeLikesKey)) || [];
 
         if (hasLiked) {
             // Unlike the recipe
-            currentLikes--;
+            const currentRecipeLikes = recipeLikes.filter((id) => id !== userId);
             const updatedUserLikes = userLikedRecipes.filter((id) => id !== recipeId);
             await Promise.all([
                 cacheUtils.setCache(userLikesKey, updatedUserLikes, CACHE_DURATIONS.LIKE_STATUS),
-                cacheUtils.setCache(recipeLikesKey, currentLikes, CACHE_DURATIONS.RECIPE_LIKE_COUNT),
+                cacheUtils.setCache(recipeLikesKey, currentRecipeLikes, CACHE_DURATIONS.RECIPE_LIKE_COUNT),
                 likeQueue.add(recipeId, userId, 'remove') // Add DB update task to queue
             ]);
         } else {
             // Like the recipe
-            currentLikes++;
+            const currentRecipeLikes = [...recipeLikes, userId];
             const updatedUserLikes = [...userLikedRecipes, recipeId];
             await Promise.all([
                 cacheUtils.setCache(userLikesKey, updatedUserLikes, CACHE_DURATIONS.USER_LIKE_STATUS),
-                cacheUtils.setCache(recipeLikesKey, currentLikes, CACHE_DURATIONS.RECIPE_LIKE_COUNT),
+                cacheUtils.setCache(recipeLikesKey, currentRecipeLikes, CACHE_DURATIONS.RECIPE_LIKE_COUNT),
                 likeQueue.add(recipeId, userId, 'add') // Add DB update task to queue
             ]);
         }
