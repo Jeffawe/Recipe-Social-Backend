@@ -4,7 +4,7 @@ import User from '../models/User.js';
 import { StatusError } from './utils/Error.js';
 import { getPresignedUrl } from './services/s3services.js';
 import Template from '../models/Template.js';
-import { cacheUtils } from '../cache/cacheconfig.js';
+import { cacheUtils, CACHE_DURATIONS } from '../cache/cacheconfig.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const USERNAME = process.env.SYSTEM_USERNAME;
