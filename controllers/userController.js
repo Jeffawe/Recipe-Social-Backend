@@ -444,10 +444,7 @@ export const getAllUsers = async (req, res, next) => {
     }
 
     // Build filter object
-    const filter = {
-      isSystem: { $ne: true },
-      isTestUser: { $ne: true }
-    };
+    const filter = { };
 
     // Add search functionality if search term provided
     if (search) {
