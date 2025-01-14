@@ -49,6 +49,11 @@ export const authController = {
         { expiresIn: '7d' }
       );
 
+      await Promise.all([
+        cacheUtils.deleteCache(`user:${user._id}`),
+        cacheUtils.clearCachePattern('userlist:*')
+      ]);
+
       res.json({ token: jwtToken, user });
 
     } catch (error) {
@@ -66,7 +71,7 @@ export const authController = {
       if (cachedUser) {
         return res.json(cachedUser); // Return cached user
       }
-      
+
       const user = await User.findById(userId)
         .select('-password -isSystem -isTestUser'); // Exclude password from the response
 
@@ -125,7 +130,11 @@ export const authController = {
         { expiresIn: '7d' }
       );
 
-      await cacheUtils.clearCachePattern('user:*')
+      await Promise.all([
+        cacheUtils.deleteCache(`user:${user._id}`),
+        cacheUtils.clearCachePattern('userlist:*')
+      ]);
+
       res.status(201).json({ token, user });
 
     } catch (error) {
@@ -395,7 +404,7 @@ export const deleteUserAccount = async (req, res, next) => {
 
     await Promise.all([
       cacheUtils.deleteCache(`user:${req.params.id}`),
-      cacheUtils.clearCachePattern('user:*')
+      cacheUtils.clearCachePattern('userlist:*')
     ]);
 
     res.status(200).json({
@@ -411,7 +420,7 @@ export const deleteUserAccount = async (req, res, next) => {
 export const getAllUsers = async (req, res, next) => {
   try {
     if (!req.isAdmin) {
-      next("An Error Occured");
+      throw new StatusError('Unauthorized access', 403);
     }
 
     // Parse query parameters with defaults
@@ -421,23 +430,23 @@ export const getAllUsers = async (req, res, next) => {
     const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
     const search = req.query.search || '';
 
-    const cacheKey = `user:${JSON.stringify({
+    const cacheKey = `userlist:${JSON.stringify({
       page,
       limit,
       sortBy,
       sortOrder,
       search
     })}`;
-    const cachedRecipes = await cacheUtils.getCache(cacheKey);
+    const cachedUsers = await cacheUtils.getCache(cacheKey);
 
-    if (cachedRecipes) {
-      return res.json(cachedRecipes); // Return cached saved recipes
+    if (cachedUsers) {
+      return res.json(cachedUsers);
     }
 
     // Build filter object
     const filter = {
-      isSystem: { $ne: false },
-      isTestUser: { $ne: false }
+      isSystem: { $ne: true },
+      isTestUser: { $ne: true }
     };
 
     // Add search functionality if search term provided
