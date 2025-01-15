@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
+import { monitorSystem, sendAlert } from '../middleware/monitor.js';
 
 import express, { json } from 'express';
 import { connect } from 'mongoose';
@@ -45,7 +46,10 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'UP' });
+  res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString()
+  });
 });
 
 // Routes
@@ -57,7 +61,7 @@ app.use('/api/cf', verifyApiKey, candfRoutes)
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  sendAlert(`Application error: ${err.message}`);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Internal Server Error',
@@ -78,3 +82,5 @@ setInterval(async () => {
     console.error('Error processing queue:', err);
   }
 }, 5 * 60 * 1000);
+
+setInterval(monitorSystem, 30 * 60 * 1000);

@@ -26,6 +26,7 @@ dist-ssr
 # Backend (.gitignore)
 .env
 venv/
+.venv
 __pycache__/
 *.pyc
 *.pyo
