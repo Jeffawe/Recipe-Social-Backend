@@ -46,6 +46,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
+  sendAlert("App health was checked. it's up and healthy")
   res.status(200).json({
       status: 'healthy',
       timestamp: new Date().toISOString()
