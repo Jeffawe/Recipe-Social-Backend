@@ -7,6 +7,12 @@ const webhookClient = new WebhookClient({
     url: process.env.DISCORD_WEBHOOK_URL 
 });
 
+const attemptMemoryCleanup = () => {
+    if (global.gc) {
+        global.gc();
+    }
+};
+
 export const monitorSystem = async () => {
     try {
         const memoryUsage = (os.freemem() / os.totalmem() * 100).toFixed(2);
@@ -57,5 +63,38 @@ export const sendAlert = async (message) => {
         });
     } catch (error) {
         console.error('Discord alert error:', error);
+    }
+};
+
+export const monitorMemory = async () => {
+    const memoryUsage = (os.freemem() / os.totalmem() * 100).toFixed(2);
+    const usedMemoryPercent = 100 - memoryUsage;
+
+    // If memory usage is above 70%, try cleanup
+    if (usedMemoryPercent > 70) {
+        attemptMemoryCleanup();
+        
+        await webhookClient.send({
+            embeds: [{
+                color: 0xFFAA00, // Orange for warning
+                title: '⚠️ High Memory Usage Detected',
+                description: `Memory Usage: ${usedMemoryPercent}%\nAttempting cleanup...`,
+                timestamp: new Date()
+            }]
+        });
+    }
+
+    // If memory usage is above 85%, trigger restart
+    if (usedMemoryPercent > 85) {
+        await webhookClient.send({
+            embeds: [{
+                color: 0xFF0000, // Red for critical
+                title: '🚨 Critical Memory Usage',
+                description: `Memory Usage: ${usedMemoryPercent}%\nTriggering application restart...`,
+                timestamp: new Date()
+            }]
+        });
+        
+        process.exit(1);
     }
 };

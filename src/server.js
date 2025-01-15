@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
-import { monitorSystem, sendAlert } from '../middleware/monitor.js';
+import { monitorMemory, monitorSystem, sendAlert } from '../middleware/monitor.js';
 
 import express, { json } from 'express';
 import { connect } from 'mongoose';
@@ -79,8 +79,18 @@ setInterval(async () => {
     await likeQueue.processQueue();
     console.log('Queue processed successfully');
   } catch (err) {
-    console.error('Error processing queue:', err);
+    sendAlert(`Error processing Queue: ${err.message}`);
   }
 }, 5 * 60 * 1000);
 
 setInterval(monitorSystem, 30 * 60 * 1000);
+
+
+setInterval(async () => {
+  try {
+    monitorSystem()
+    monitorMemory()
+  } catch (err) {
+    sendAlert(`Application error: ${err.message}`);
+  }
+}, 30 * 60 * 1000);
