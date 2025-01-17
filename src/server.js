@@ -91,4 +91,4 @@ setInterval(async () => {
   } catch (err) {
     sendAlert(`Application error: ${err.message}`);
   }
-}, 30 * 60 * 1000);
+}, 240 * 60 * 1000);
