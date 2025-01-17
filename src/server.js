@@ -86,8 +86,8 @@ setInterval(async () => {
 
 setInterval(async () => {
   try {
-    monitorSystem()
-    monitorMemory()
+    await monitorSystem()
+    await monitorMemory()
   } catch (err) {
     sendAlert(`Application error: ${err.message}`);
   }
