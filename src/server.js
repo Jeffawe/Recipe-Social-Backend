@@ -29,6 +29,14 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  exposedHeaders: ['*']
+}));
+
 if (!process.env.MONGODB_URI || !process.env.API_KEY) {
   console.error('Missing required environment variables.');
   process.exit(1);
