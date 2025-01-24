@@ -267,7 +267,7 @@ export const getAllRecipes = async (req, res) => {
                     }));
 
                     // Combine existing and external recipes
-                    recipes = [...recipesWithLikes, ...externalRecipes];
+                    recipesWithLikes = [...recipesWithLikes, ...externalRecipes];
                     total += externalRecipes.length;
                 }
             } catch (externalSearchError) {
@@ -276,7 +276,7 @@ export const getAllRecipes = async (req, res) => {
         }
 
         const response = {
-            recipes,
+            recipesWithLikes,
             totalPages: Math.ceil(total / limit),
             currentPage: page
         };
