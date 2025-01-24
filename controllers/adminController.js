@@ -1,4 +1,5 @@
 import { getOrCreateDeletedUser } from './userController.js'
+import { cacheUtils } from '../cache/cacheconfig.js'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -7,7 +8,7 @@ export const verifyAdmin = async (req, res) => {
     try {
         const { password } = req.body;
 
-        if(password != process.env.SYSTEM_PASSWORD){
+        if (password != process.env.SYSTEM_PASSWORD) {
             res.status(500).json({
                 message: 'Error verifying admin',
                 error: error.message
@@ -34,6 +35,31 @@ export const verifyAdmin = async (req, res) => {
     } catch (error) {
         res.status(500).json({
             message: 'Error verifying admin',
+            error: error.message
+        });
+    }
+};
+
+export const clearCache = async (req, res) => {
+    try {
+        if (!req.isAdmin) {
+            throw new StatusError('Unauthorized access', 403);
+        }
+
+        const { key } = req.query;
+
+        if (!key) {
+            // If no specific key, clear all recipe-related caches
+            await cacheUtils.clearPattern('recipes:*');
+            return res.json({ message: 'All recipe caches cleared' });
+        }else{
+            await cacheUtils.clearPattern(`${key}:*`);
+        }
+
+        res.json({ message: `Cache cleared for key: ${key}` });
+    } catch (error) {
+        res.status(500).json({
+            message: 'Error clearing cache',
             error: error.message
         });
     }

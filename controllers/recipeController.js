@@ -177,15 +177,14 @@ export const getAllRecipes = async (req, res) => {
         if (featured === 'true') filter.featured = true;
         if (popular === 'true') filter.popular = true;
 
+        const search_data = {};
+
         if (search) {
             filter.$or = [
                 { title: { $regex: search, $options: 'i' } },
                 { description: { $regex: search, $options: 'i' } }
             ];
-        }
 
-        const search_data = {};
-        if (search) {
             search_data['title'] = search;
         }
 
