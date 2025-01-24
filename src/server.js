@@ -13,6 +13,7 @@ import userRoutes from '../routes/userRoutes.js';
 import templateRoutes from '../routes/templateRoutes.js';
 import adminRoutes from '../routes/adminRoutes.js'
 import candfRoutes from '../routes/candfRoutes.js'
+import scraperRoutes from '../routes/scraperRoutes.js'
 
 import { likeQueue } from '../cache/cacheconfig.js';
 import { verifyApiKey } from '../middleware/apiKey.js';
@@ -67,6 +68,7 @@ app.use('/api/auth', verifyApiKey, userRoutes);
 app.use('/api/templates', verifyApiKey, templateRoutes);
 app.use('/api/admin', verifyApiKey, adminRoutes)
 app.use('/api/cf', verifyApiKey, candfRoutes)
+app.use('/api/scrape', verifyApiKey, scraperRoutes)
 
 // Global error handler
 app.use((err, req, res, next) => {
