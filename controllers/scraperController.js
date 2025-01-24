@@ -35,9 +35,9 @@ export const scrapeSites = async (req, res) => {
             data: response.data
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
+        res.status(500).json({ 
+            success: false, 
+            error: error.response?.data || error.message 
         });
     }
 };
