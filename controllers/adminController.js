@@ -1,5 +1,6 @@
 import { getOrCreateDeletedUser } from './userController.js'
 import { cacheUtils } from '../cache/cacheconfig.js'
+import { StatusError } from './utils/Error.js';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
