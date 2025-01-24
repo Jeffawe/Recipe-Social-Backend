@@ -51,10 +51,10 @@ export const clearCache = async (req, res) => {
 
         if (!key) {
             // If no specific key, clear all recipe-related caches
-            await cacheUtils.clearPattern('recipes:*');
+            await cacheUtils.clearCachePattern('recipes:*');
             return res.json({ message: 'All recipe caches cleared' });
         }else{
-            await cacheUtils.clearPattern(`${key}:*`);
+            await cacheUtils.clearCachePattern(`${key}:*`);
         }
 
         res.json({ message: `Cache cleared for key: ${key}` });
