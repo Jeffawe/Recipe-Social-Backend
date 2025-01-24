@@ -24,11 +24,15 @@ export const generateCSV = async (req, res) => {
 export const scrapeSites = async (req, res) => {
     try {
         const { searchData, threshold = 0.3 } = req.body;
-
-        const response = await axios.post(`${BASE_URL}/search/recipe`, {
-            search_data: searchData,
-            threshold
-        });
+        const response = await axios.post(
+            `${BASE_URL}/search/recipe`, 
+            req.body,
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
 
         res.status(200).json({
             success: true,
