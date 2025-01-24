@@ -7,3 +7,5 @@ const router = express.Router();
 router.post('/', scrapeSites);
 
 router.post('/generate', isAdmin, generateCSV)
+
+export default router;
