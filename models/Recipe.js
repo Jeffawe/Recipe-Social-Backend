@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import { type } from 'requests';
 
 // Define the schema for a Recipe
 const RecipeSchema = new mongoose.Schema({
