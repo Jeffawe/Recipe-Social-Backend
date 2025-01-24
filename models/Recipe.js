@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { type } from 'requests';
 
 // Define the schema for a Recipe
 const RecipeSchema = new mongoose.Schema({
@@ -115,6 +116,11 @@ const RecipeSchema = new mongoose.Schema({
 
   templateString: {
     type: String
+  },
+
+  external: {
+    type: Boolean,
+    default: false
   },
 
   // User who created the recipe

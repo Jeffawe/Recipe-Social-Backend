@@ -46,6 +46,24 @@ export const scrapeSites = async (req, res) => {
     }
 };
 
+export const scrapeSitesInternal = async (searchData, threshold=0.3) => {
+    try {
+        const response = await axios.post(
+            `${BASE_URL}/search/recipe`, 
+            { searchData, threshold },
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        return response.data
+    } catch (error) {
+        return error.response?.data || error.message 
+    }
+};
+
 // Optional error handling utility
 export const handleApiError = (error, res) => {
     if (error.response) {

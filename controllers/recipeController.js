@@ -3,6 +3,7 @@ import Recipe from '../models/Recipe.js';
 import User from '../models/User.js';
 import Template from '../models/Template.js';
 import { cacheUtils, CACHE_DURATIONS } from '../cache/cacheconfig.js'
+import { scrapeSitesInternal } from './scraperController.js';
 
 export const createRecipe = async (req, res) => {
     try {
@@ -142,7 +143,8 @@ export const getAllRecipes = async (req, res) => {
             featured,
             popular,
             latest,
-            category
+            category,
+            search
         } = req.query;
 
         const cacheKey = `recipes:${page}:${limit}:${featured}:${popular}:${latest}:${category}`;
@@ -174,6 +176,18 @@ export const getAllRecipes = async (req, res) => {
         if (category) filter.category = category;
         if (featured === 'true') filter.featured = true;
         if (popular === 'true') filter.popular = true;
+
+        if (search) {
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const search_data = {};
+        if (search) {
+            search_data['title'] = search;
+        }
 
         let recipes;
         let total;
@@ -233,8 +247,36 @@ export const getAllRecipes = async (req, res) => {
         //     })
         // );
 
+        if (search) {
+            try {
+                const additionalData = await scrapeSitesInternal(search_data, 0.3);
+                
+                if (additionalData && additionalData.success && additionalData.data.results) {
+                    const externalRecipes = additionalData.data.results.map(result => ({
+                        title: result.title,
+                        pageURL: result.url,
+                        images: [{
+                            url: result.imageURL
+                        }],
+                        external: true,
+                        author: mongoose.Types.ObjectId(), // Placeholder author
+                        ingredients: [], // Empty ingredients
+                        description: '', // Empty description
+                        category: 'Uncategorized',
+                        likes: []
+                    }));
+
+                    // Combine existing and external recipes
+                    recipes = [...recipesWithLikes, ...externalRecipes];
+                    total += externalRecipes.length;
+                }
+            } catch (externalSearchError) {
+                console.error('External search error:', externalSearchError);
+            }
+        }
+
         const response = {
-            recipes: recipesWithLikes,
+            recipes,
             totalPages: Math.ceil(total / limit),
             currentPage: page
         };
