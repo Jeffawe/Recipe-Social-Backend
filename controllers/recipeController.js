@@ -528,7 +528,6 @@ export const deleteRecipe = async (req, res) => {
             cacheUtils.clearCachePattern('recipes:*'),
             cacheUtils.deleteCache(`user:${req.user.userId}`),
             cacheUtils.clearCachePattern('latest:*'),
-            cacheUtils.clearCachePattern(`category:${category}:*`),
             cacheUtils.clearCachePattern('search:*')
         ]);
 
