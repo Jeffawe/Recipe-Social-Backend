@@ -25,8 +25,8 @@ app.use(helmet());
 app.use(cors()); // Enable CORS
 app.use(json()); // Parse JSON bodies
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // Limit each IP to 100 requests per windowMs
+  windowMs: 30 * 60 * 1000, // 30 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
 });
 app.use(limiter);
 
