@@ -295,7 +295,6 @@ export const getUserSavedRecipes = async (req, res, next) => {
   }
 };
 
-
 export const updateUserProfile = async (req, res, next) => {
   try {
     // Only allow updating specific fields
@@ -312,19 +311,20 @@ export const updateUserProfile = async (req, res, next) => {
       throw new StatusError('Not authorized to update this profile', 403);
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
+    // Use findOneAndUpdate to check `isSystem` and update in a single query
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: req.params.id, isSystem: { $ne: true } }, // Check for isSystem: false
       { $set: updates },
       { new: true, runValidators: true }
     ).select('-password -isTestUser -__v');
 
-    if (!user) {
-      throw new StatusError('User not found', 404);
+    if (!updatedUser) {
+      throw new StatusError('User not found or is a system user', 403);
     }
 
     await cacheUtils.deleteCache(`user:${req.params.id}`);
 
-    res.json(user);
+    res.json(updatedUser);
   } catch (error) {
     next(error);
   }
@@ -332,6 +332,14 @@ export const updateUserProfile = async (req, res, next) => {
 
 export const getOrCreateDeletedUser = async () => {
   try {
+    const cacheKey = 'deletedUser'
+    const cachedUser = await cacheUtils.getCache(cacheKey);
+
+    if (cachedUser) {
+      return cachedUser; 
+    }
+
+    
     let deletedUser = await User.findOne({
       isSystem: true,
       username: process.env.SYSTEM_USERNAME
@@ -348,6 +356,7 @@ export const getOrCreateDeletedUser = async () => {
       });
     }
 
+    await cacheUtils.setCache(cacheKey, deletedUser, CACHE_DURATIONS.USER_PROFILE);
     return deletedUser;
   } catch (error) {
     console.error('Error managing deleted user:', error);
@@ -403,6 +412,7 @@ export const deleteUserAccount = async (req, res, next) => {
     await User.findByIdAndDelete(req.params.id);
 
     await Promise.all([
+      cacheUtils.deleteCache('deletedUser'),
       cacheUtils.deleteCache(`user:${req.params.id}`),
       cacheUtils.clearCachePattern('userlist:*')
     ]);

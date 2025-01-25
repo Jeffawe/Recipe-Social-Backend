@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { getOrCreateDeletedUser } from './userController.js';
+import { generateShortUniqueId } from './utils/Error.js';
+import { CACHE_DURATIONS, cacheUtils } from '../cache/cacheconfig.js';
 
 const BASE_URL = 'http://127.0.0.1:8000';
 
@@ -20,47 +23,150 @@ export const generateCSV = async (req, res) => {
     }
 };
 
+const createCacheKey = (data) => {
+    const { search_data = {}, threshold = '' } = data;
+
+    // Extract title and ingredients, set to empty string if not defined
+    const title = search_data.title || '';
+    const ingredients = (search_data.ingredients || []).join(',');
+
+    // Create the string
+    return `search_data[title:${title}][ingredients:${ingredients}][threshold:${threshold}]`;
+};
+
 
 export const scrapeSites = async (req, res) => {
     try {
-        const { searchData, threshold = 0.3 } = req.body;
+        if (!req.body || typeof req.body !== 'object') {
+            return res.status(400).json({ success: false, error: 'Invalid request body' });
+        }
+
+        const cacheKey = createCacheKey(req.body)
+        const cachedUsers = await cacheUtils.getCache(cacheKey);
+
+        if (cachedUsers) {
+            return res.json(cachedUsers);
+        }
+
         const response = await axios.post(
-            `${BASE_URL}/search/recipe`, 
+            `${BASE_URL}/search/recipe`,
             req.body,
             {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             }
-        );
-
-        res.status(200).json({
-            success: true,
-            data: response.data
+        ).catch(error => {
+            throw error.response?.data || error.message || 'External API call failed';
         });
+
+        if (!response || !response.data?.results) {
+            throw new Error("No results received from external API");
+        }
+
+        let uniqueExternalRecipes;
+        const deletedUser = await getOrCreateDeletedUser();
+
+        if (response && response.data.results) {
+            const externalRecipes = response.data.results.map(result => ({
+                _id: generateShortUniqueId(result.title, result.url),
+                title: result.title,
+                pageURL: result.url,
+                images: [{
+                    url: result.imageURL
+                }],
+                external: true,
+                author: deletedUser._id || null, // Placeholder author
+                ingredients: [], // Empty ingredients
+                description: '', // Empty description
+                category: 'Uncategorized',
+                likes: []
+            }));
+
+            uniqueExternalRecipes = externalRecipes.filter((value, index, self) =>
+                index === self.findIndex((t) => (
+                    t.pageURL === value.pageURL // Compare by pageURL to remove duplicates
+                ))
+            );
+        } else {
+            throw new Error("Can't Convert Results")
+        }
+
+        const responseVal = {
+            success: true,
+            data: uniqueExternalRecipes
+        }
+
+        await cacheUtils.setCache(cacheKey, responseVal, CACHE_DURATIONS.RECIPE_LIST)
+
+        res.status(200).json(responseVal);
     } catch (error) {
-        res.status(500).json({ 
-            success: false, 
-            error: error.response?.data || error.message 
+        res.status(500).json({
+            success: false,
+            error: error.response?.data || error.message
         });
     }
 };
 
-export const scrapeSitesInternal = async (searchData, threshold=0.3) => {
+export const scrapeSitesInternal = async (searchData, threshold = 0.3) => {
     try {
-        const response = await axios.post(
-            `${BASE_URL}/search/recipe`, 
-            { searchData, threshold },
-            {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+        const cacheKey = createCacheKey({"search_Data": searchData, "threshold":threshold})
+        const cachedUsers = await cacheUtils.getCache(cacheKey);
 
-        return response.data
+        if (cachedUsers) {
+            return cachedUsers;
+        }
+
+        const response = await axios.post(
+            `${BASE_URL}/search/recipe`,
+            { "search_data": searchData, "threshold": threshold },
+            {
+                headers: { 'Content-Type': 'application/json' }
+            }
+        ).catch(error => {
+            throw error.response?.data || error.message || 'External API call failed';
+        });
+
+        if (!response || !response.data?.results) {
+            throw new Error("No results received from external API");
+        }
+
+        let uniqueExternalRecipes;
+        const deletedUser = await getOrCreateDeletedUser();
+
+        if (response && response.data.results) {
+            const externalRecipes = response.data.results.map(result => ({
+                _id: generateShortUniqueId(result.title, result.url),
+                title: result.title,
+                pageURL: result.url,
+                images: [{
+                    url: result.imageURL
+                }],
+                external: true,
+                author: deletedUser._id || null, // Placeholder author
+                ingredients: [], // Empty ingredients
+                description: '', // Empty description
+                category: 'Uncategorized',
+                likes: []
+            }));
+
+            uniqueExternalRecipes = externalRecipes.filter((value, index, self) =>
+                index === self.findIndex((t) => (
+                    t.pageURL === value.pageURL // Compare by pageURL to remove duplicates
+                ))
+            );
+        } else {
+            throw new Error("Can't Find Results")
+        }
+
+        const responseVal = {
+            success: true,
+            data: uniqueExternalRecipes
+        }
+
+        await cacheUtils.setCache(cacheKey, responseVal, CACHE_DURATIONS.RECIPE_LIST)
+
+        return responseVal;
     } catch (error) {
-        return error.response?.data || error.message 
+        throw error
     }
 };
 

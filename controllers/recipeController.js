@@ -140,17 +140,17 @@ export const getAllRecipes = async (req, res) => {
         const {
             page = 1,
             limit = 10,
-            featured,
-            popular,
-            latest,
+            featured = false,
+            popular = false,
+            latest = false,
             category,
             search
         } = req.query;
 
-        const cacheKey = `recipes:${page}:${limit}:${featured}:${popular}:${latest}:${category}`;
+        const cacheKey = `recipes:${page}:${limit}:${featured}:${popular}:${search}:${latest}:${category}`;
 
         const cachedData = await cacheUtils.getCache(cacheKey);
-        if (cachedData) {
+        if (cachedData && cachedData.recipes && Array.isArray(cachedData.recipes)) {
             const parsedData = cachedData;
 
             // Fetch likes for cached recipes
@@ -158,7 +158,7 @@ export const getAllRecipes = async (req, res) => {
             const recipeLikeKeys = recipeIds.map((id) => `recipe-likes:${id}`);
             const cachedLikes = await cacheUtils.mget(recipeLikeKeys);
 
-            if(!cachedLikes){
+            if (!cachedLikes) {
                 return res.json(cachedData)
             }
             // Integrate likes into recipes
@@ -215,7 +215,7 @@ export const getAllRecipes = async (req, res) => {
         const cachedLikes = await cacheUtils.mget(recipeLikeKeys);
 
         // Integrate likes into recipes
-        const recipesWithLikes = await Promise.all(
+        let recipesWithLikes = await Promise.all(
             recipes.map(async (recipe, index) => {
                 const imagesWithUrls = await Promise.all(
                     recipe.images.map(async (image) => {
@@ -249,25 +249,14 @@ export const getAllRecipes = async (req, res) => {
         if (search) {
             try {
                 const additionalData = await scrapeSitesInternal(search_data, 0.3);
-                
-                if (additionalData && additionalData.success && additionalData.data.results) {
-                    const externalRecipes = additionalData.data.results.map(result => ({
-                        title: result.title,
-                        pageURL: result.url,
-                        images: [{
-                            url: result.imageURL
-                        }],
-                        external: true,
-                        author: mongoose.Types.ObjectId(), // Placeholder author
-                        ingredients: [], // Empty ingredients
-                        description: '', // Empty description
-                        category: 'Uncategorized',
-                        likes: []
-                    }));
 
-                    // Combine existing and external recipes
-                    recipesWithLikes = [...recipesWithLikes, ...externalRecipes];
-                    total += externalRecipes.length;
+                if (additionalData && additionalData.success && additionalData.data) {
+                    recipesWithLikes = [
+                        ...recipesWithLikes,
+                        ...additionalData.data
+                    ];
+
+                    total += additionalData.data.length;
                 }
             } catch (externalSearchError) {
                 console.error('External search error:', externalSearchError);
@@ -275,12 +264,12 @@ export const getAllRecipes = async (req, res) => {
         }
 
         const response = {
-            recipesWithLikes,
+            recipes: recipesWithLikes,
             totalPages: Math.ceil(total / limit),
             currentPage: page
         };
 
-        // Cache the response
+        //Cache the response
         await cacheUtils.setCache(
             cacheKey,
             response,
