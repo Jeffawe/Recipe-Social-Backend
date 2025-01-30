@@ -82,7 +82,7 @@ export const commentController = {
             }
 
             // Check if user is the author
-            if (comment.author.toString() !== req.user._id.toString()) {
+            if (comment.author.toString() !== req.user.userId.toString()) {
                 return res.status(403).json({ message: 'Unauthorized' });
             }
 
@@ -107,7 +107,7 @@ export const commentController = {
             }
 
             // Check if user is the author
-            if (comment.author.toString() !== req.user._id.toString()) {
+            if (comment.author.toString() !== req.user.userId.toString()) {
                 return res.status(403).json({ message: 'Unauthorized' });
             }
 
@@ -122,7 +122,7 @@ export const commentController = {
     toggleLike: async (req, res) => {
         try {
             const { commentId } = req.params;
-            const userId = req.user._id;
+            const userId = req.user.userId;
 
             const comment = await Comment.findById(commentId);
             if (!comment) {
