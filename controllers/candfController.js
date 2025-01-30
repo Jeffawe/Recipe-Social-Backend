@@ -11,7 +11,7 @@ export const commentController = {
             const { content, recipeId, parentCommentId } = req.body;
             const comment = new Comment({
                 content,
-                author: req.user._id,  // Assuming you have auth middleware
+                author: req.user.userId,  // Assuming you have auth middleware
                 recipe: recipeId,
                 parentComment: parentCommentId || null
             });
