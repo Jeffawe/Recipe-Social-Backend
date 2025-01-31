@@ -106,9 +106,9 @@ export const scrapeSites = async (req, res) => {
     }
 };
 
-export const scrapeSitesInternal = async (searchData, threshold = 0.3) => {
+export const scrapeSitesInternal = async (searchData, threshold = 0.3, page = 1, limit = 10) => {
     try {
-        const cacheKey = createCacheKey({"search_Data": searchData, "threshold":threshold})
+        const cacheKey = createCacheKey({"search_Data": searchData, "threshold":threshold, "page":page, "limit":limit})
         const cachedUsers = await cacheUtils.getCache(cacheKey);
 
         if (cachedUsers) {
@@ -117,7 +117,7 @@ export const scrapeSitesInternal = async (searchData, threshold = 0.3) => {
 
         const response = await axios.post(
             `${BASE_URL}/search/recipe`,
-            { "search_data": searchData, "threshold": threshold },
+            {"search_Data": searchData, "threshold":threshold, "page":page, "limit":limit},
             {
                 headers: { 'Content-Type': 'application/json' }
             }

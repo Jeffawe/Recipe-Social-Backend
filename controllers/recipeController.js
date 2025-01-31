@@ -139,7 +139,7 @@ export const getAllRecipes = async (req, res) => {
         // Extract query parameters
         const {
             page = 1,
-            limit = 10,
+            limit = 20,
             featured = false,
             popular = false,
             latest = false,
@@ -172,6 +172,7 @@ export const getAllRecipes = async (req, res) => {
             return res.json(parsedData);
         }
 
+        const dbLimit = Math.ceil(limit / 2);
         const filter = {};
         if (category) filter.category = category;
         if (featured === 'true') filter.featured = true;
@@ -199,8 +200,8 @@ export const getAllRecipes = async (req, res) => {
         } else {
             // Find recipes with filtering, pagination, and population
             recipes = await Recipe.find(filter)
-                .limit(limit * 1)
-                .skip((page - 1) * limit)
+                .limit(dbLimit * 1)
+                .skip((page - 1) * dbLimit)
                 .populate('author', 'username')
                 .sort({ createdAt: -1 });
 
@@ -248,7 +249,7 @@ export const getAllRecipes = async (req, res) => {
 
         if (search) {
             try {
-                const additionalData = await scrapeSitesInternal(search_data, 0.3);
+                const additionalData = await scrapeSitesInternal(search_data, 0.3, page, dbLimit);
 
                 if (additionalData && additionalData.success && additionalData.data) {
                     recipesWithLikes = [
@@ -263,8 +264,14 @@ export const getAllRecipes = async (req, res) => {
             }
         }
 
+        // Sort by createdAt (ensuring consistency)
+        recipesWithLikes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // Apply pagination after merging internal & external recipes
+        const paginatedResults = recipesWithLikes.slice((page - 1) * limit, page * limit);
+
         const response = {
-            recipes: recipesWithLikes,
+            recipes: paginatedResults,
             totalPages: Math.ceil(total / limit),
             currentPage: page
         };
