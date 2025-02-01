@@ -117,7 +117,7 @@ export const scrapeSitesInternal = async (searchData, threshold = 0.3, page = 1,
 
         const response = await axios.post(
             `${BASE_URL}/search/recipe`,
-            {"search_Data": searchData, "threshold":threshold, "page":page, "limit":limit},
+            {"search_data": searchData, "threshold":threshold, "page":page, "limit":limit},
             {
                 headers: { 'Content-Type': 'application/json' }
             }
