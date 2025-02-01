@@ -142,8 +142,8 @@ export const scrapeSitesInternal = async (searchData, threshold = 0.3, page = 1,
                 }],
                 external: true,
                 author: deletedUser._id || null, // Placeholder author
-                ingredients: [], // Empty ingredients
-                description: '', // Empty description
+                ingredients: [], 
+                description: '',
                 category: 'Uncategorized',
                 likes: []
             }));
