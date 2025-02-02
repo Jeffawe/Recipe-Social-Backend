@@ -11,6 +11,7 @@ export const generateCSV = async (req, res) => {
             throw new StatusError('Unauthorized access', 403);
         }
         const response = await axios.post(`${BASE_URL}/search/create`);
+        cacheUtils.clearCachePattern('search_data*')
         res.status(200).json({
             success: true,
             data: response.data
@@ -24,14 +25,17 @@ export const generateCSV = async (req, res) => {
 };
 
 const createCacheKey = (data) => {
-    const { search_data = {}, threshold = '' } = data;
+    const { search_data = {}, threshold = 0, page = 0, limit = 0 } = data;
 
     // Extract title and ingredients, set to empty string if not defined
     const title = search_data.title || '';
-    const ingredients = (search_data.ingredients || []).join(',');
+    const ingredients = (search_data.ingredients || [])
+      .slice()
+      .sort()
+      .join(',');
 
     // Create the string
-    return `search_data[title:${title}][ingredients:${ingredients}][threshold:${threshold}]`;
+    return `search_data[title:${title}][ingredients:${ingredients}][threshold:${threshold}][page:${page}][limit:${limit}]`;
 };
 
 
@@ -108,7 +112,7 @@ export const scrapeSites = async (req, res) => {
 
 export const scrapeSitesInternal = async (searchData, threshold = 0.3, page = 1, limit = 10) => {
     try {
-        const cacheKey = createCacheKey({"search_Data": searchData, "threshold":threshold, "page":page, "limit":limit})
+        const cacheKey = createCacheKey({"search_data": searchData, "threshold":threshold, "page":page, "limit":limit})
         const cachedUsers = await cacheUtils.getCache(cacheKey);
 
         if (cachedUsers) {
