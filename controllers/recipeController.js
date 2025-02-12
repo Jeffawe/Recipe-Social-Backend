@@ -144,10 +144,11 @@ export const getAllRecipes = async (req, res) => {
             popular = false,
             latest = false,
             category,
-            search
+            search,
+            ingredients
         } = req.query;
 
-        const cacheKey = `recipes:${page}:${limit}:${featured}:${popular}:${search}:${latest}:${category}`;
+        const cacheKey = `recipes:${page}:${limit}:${featured}:${popular}:${search}:${latest}:${category}:${ingredients}`;
 
         const cachedData = await cacheUtils.getCache(cacheKey);
         if (cachedData && cachedData.recipes && Array.isArray(cachedData.recipes)) {
@@ -187,6 +188,7 @@ export const getAllRecipes = async (req, res) => {
             ];
 
             search_data['title'] = search;
+            if (Array.isArray(ingredients) && ingredients.length > 0) search_data['ingredients'] = ingredients;
         }
 
         let recipes;
