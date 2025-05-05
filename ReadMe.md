@@ -16,4 +16,4 @@ This backend powers the Recipe Community Social app. It allows users to share, d
 - **models/** - Contains Mongoose models for `User`, `Recipe`, and `Template`.
 - **routes/** - Defines the routes for handling HTTP requests.
 - **controllers/** - Contains logic for handling requests and interacting with the models.
-- **server.js** - The main entry point to start the Express server and connect to the database.
+- **src/server.js** - The main entry point to start the Express server and connect to the database.
