@@ -2,8 +2,10 @@ import axios from 'axios';
 import { getOrCreateDeletedUser } from './userController.js';
 import { generateShortUniqueId } from './utils/Error.js';
 import { CACHE_DURATIONS, cacheUtils } from '../cache/cacheconfig.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const BASE_URL = 'http://127.0.0.1:8000';
+const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:8000';
 
 export const generateCSV = async (req, res) => {
     try {
